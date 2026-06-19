@@ -20,6 +20,8 @@ export const metadata: Metadata = {
   description: "Sistema completo para gestão de buffet e eventos",
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
   children,
 }: Readonly<{
