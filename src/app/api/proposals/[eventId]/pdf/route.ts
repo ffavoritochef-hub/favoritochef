@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import PDFDocument from 'pdfkit';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
 export async function GET(request: NextRequest, { params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
   console.log('PDF API called with eventId:', eventId);
@@ -15,6 +10,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const download = searchParams.get('download') === 'true';
 
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    
     // Get event with client
     const { data: event, error: eventError } = await supabase
       .from('events')
