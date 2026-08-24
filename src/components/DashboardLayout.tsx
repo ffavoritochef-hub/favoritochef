@@ -90,9 +90,8 @@ function SidebarContent({
 }
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -147,7 +146,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div className="w-11 shrink-0" />
         </header>
 
-        <div className="p-4 sm:p-6 lg:p-8 relative pb-20 sm:pb-8">
+        <div className="p-3 sm:p-6 lg:p-8 relative pb-20 sm:pb-8 w-full max-w-full">
           {/* Background Neon Orbs */}
           <div className="fixed top-[-20%] right-[-10%] w-[60%] h-[50%] bg-primary/5 rounded-full blur-[150px] -z-10 pointer-events-none" />
           <div className="fixed bottom-[-20%] left-[-10%] w-[60%] h-[50%] bg-primary/5 rounded-full blur-[150px] -z-10 pointer-events-none" />

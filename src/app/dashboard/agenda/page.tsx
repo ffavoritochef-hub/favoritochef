@@ -22,10 +22,19 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+const statusStyles: Record<string, string> = {
+  'Orçamento enviado': 'bg-sky-500 text-white border-sky-400 shadow-[0_0_8px_rgba(14,165,233,0.4)]',
+  'Aguardando aprovação': 'bg-amber-500 text-zinc-950 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.45)]',
+  'Aprovado': 'bg-emerald-500 text-white border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.45)]',
+  'Em andamento': 'bg-violet-500 text-white border-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.5)]',
+  'Finalizado': 'bg-zinc-600 text-white border-zinc-500',
+  'Cancelado': 'bg-rose-500 text-white border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.45)]',
+};
+
 export default function AgendaPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [_selectedEvent, setSelectedEvent] = useState<any>(null);
 
   useEffect(() => {
     fetchEvents();
@@ -82,132 +91,132 @@ export default function AgendaPage() {
   const groupedEvents = groupEventsByMonth(events);
 
   return (
-    <div className="space-y-5 sm:space-y-8">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tighter neon-glow">Agenda de Eventos</h1>
-          <p className="text-zinc-400 mt-1 text-sm sm:text-base">Todos os eventos organizados por mês, automaticamente.</p>
+    <div className="w-full space-y-4 sm:space-y-8 -mx-1 px-1 sm:mx-0 sm:px-0">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 px-1 sm:px-0">
+        <div className="w-full">
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight neon-glow">Agenda de Eventos</h1>
+          <p className="text-zinc-400 mt-1 text-xs sm:text-base leading-relaxed">Todos os eventos organizados por mês, automaticamente.</p>
         </div>
-        <Badge variant="outline" className="border-primary/50 text-primary self-start md:self-center text-sm px-4 py-1.5">
+        <Badge variant="outline" className="border-primary/60 text-primary self-start md:self-center text-sm font-semibold px-4 py-2 w-full md:w-auto justify-center">
           {events.length} {events.length === 1 ? 'Evento' : 'Eventos'} no total
         </Badge>
       </header>
 
-      <div className="space-y-8 sm:space-y-10">
+      <div className="w-full space-y-7 sm:space-y-10">
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-4 rounded-xl border border-white/10 bg-white/5">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            <p className="text-sm">Carregando agenda...</p>
+          <div className="flex flex-col items-center justify-center h-64 text-zinc-400 gap-4 rounded-2xl border border-white/10 bg-white/[0.04] mx-1">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-[3px] border-primary"></div>
+            <p className="text-sm font-medium">Carregando agenda...</p>
           </div>
         ) : events.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 border border-dashed border-white/10 rounded-xl bg-white/5 text-zinc-500 p-6 text-center">
-            <CalendarIcon className="w-12 h-12 mb-4 opacity-20 shrink-0" />
-            <p className="italic text-sm sm:text-base">Nenhum evento agendado.</p>
+          <div className="flex flex-col items-center justify-center h-72 border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.03] text-zinc-400 p-6 text-center mx-1">
+            <CalendarIcon className="w-14 h-14 mb-4 opacity-30 shrink-0 text-primary/50" />
+            <p className="text-base sm:text-lg font-medium text-white/80">Nenhum evento agendado.</p>
+            <p className="text-xs sm:text-sm text-zinc-500 mt-2">Clique em &quot;Agendar Evento&quot; para começar.</p>
           </div>
         ) : (
           groupedEvents.map((group) => (
-            <section key={group.key} className="space-y-4 sm:space-y-5">
-              <div className="flex items-center gap-3 sticky top-0 bg-zinc-950/95 backdrop-blur-sm py-3 -mx-2 sm:mx-0 px-2 sm:px-0 z-10 rounded-lg">
-                <div className="h-px flex-1 bg-gradient-to-r from-primary/50 via-primary/20 to-transparent"></div>
-                <h2 className="text-lg sm:text-xl font-bold text-primary uppercase tracking-wider shrink-0">
+            <section key={group.key} className="space-y-3 sm:space-y-5 w-full">
+              <div className="flex items-center gap-2 sm:gap-3 sticky top-[56px] sm:top-0 bg-zinc-950/98 backdrop-blur-md py-3 sm:py-4 -mx-1 px-1 sm:mx-0 sm:px-0 z-20 rounded-xl border-b border-primary/20 sm:border-none">
+                <div className="h-[2px] flex-1 bg-gradient-to-r from-primary via-primary/40 to-transparent rounded-full"></div>
+                <h2 className="text-base sm:text-xl font-black text-primary uppercase tracking-wider shrink-0 whitespace-nowrap">
                   {group.monthLabel}
                 </h2>
-                <Badge variant="outline" className="border-primary/30 text-primary/80 shrink-0">
+                <Badge className="bg-primary text-white border-none font-bold text-xs shrink-0 px-3 py-1">
                   {group.events.length}
                 </Badge>
-                <div className="h-px flex-1 bg-gradient-to-l from-primary/50 via-primary/20 to-transparent"></div>
+                <div className="h-[2px] flex-1 bg-gradient-to-l from-primary via-primary/40 to-transparent rounded-full"></div>
               </div>
 
-              <div className="space-y-3 sm:space-y-4">
+              <div className="space-y-3 sm:space-y-4 w-full">
                 {group.events.map((event) => (
                   <div 
                     key={event.id} 
-                    className="group relative rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm p-4 sm:p-6 hover:bg-white/[0.08] transition-all hover:border-primary/30"
+                    className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] backdrop-blur-sm p-4 sm:p-6 hover:from-white/[0.09] hover:to-white/[0.04] transition-all duration-200 hover:border-primary/40 hover:shadow-[0_0_25px_rgba(188,19,254,0.12)] w-full"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
-                      <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-                        <div className="flex flex-row sm:flex-col items-center sm:justify-center gap-2 sm:gap-0 w-full sm:w-auto px-4 py-3 sm:px-0 sm:py-0 sm:w-20 sm:h-20 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
-                          <span className="text-2xl sm:text-2xl font-black leading-none">{new Date(event.date).getDate()}</span>
-                          <span className="text-[10px] sm:text-xs uppercase font-bold">
-                            {new Date(event.date).toLocaleString('pt-BR', { weekday: 'short' })}
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-5 w-full">
+                      <div className="flex flex-col sm:flex-row gap-3 sm:gap-5 w-full">
+                        <div className="flex flex-row sm:flex-col items-center justify-center gap-1 sm:gap-0 w-full sm:w-auto px-4 py-3.5 sm:px-0 sm:py-0 sm:w-24 sm:h-24 rounded-xl bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 border border-primary/30 text-primary shrink-0">
+                          <span className="text-3xl sm:text-3xl font-black leading-none text-white drop-shadow-[0_0_8px_rgba(188,19,254,0.4)]">{new Date(event.date).getDate()}</span>
+                          <span className="text-[11px] sm:text-xs uppercase font-extrabold tracking-widest text-primary/90">
+                            {new Date(event.date).toLocaleString('pt-BR', { weekday: 'short' }).replace('.', '')}
                           </span>
                         </div>
-                        <div className="space-y-1.5 sm:space-y-1 flex-1 min-w-0">
-                          <div className="flex flex-wrap items-start gap-2 sm:gap-3">
+                        <div className="space-y-2 sm:space-y-1.5 flex-1 min-w-0 w-full">
+                          <div className="flex flex-wrap items-start gap-2 sm:gap-3 w-full">
                             <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-primary transition-colors break-words">{event.name}</h3>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-tighter shrink-0 ${
-                              event.status === 'Aprovado' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                              event.status === 'Cancelado' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                              event.status === 'Finalizado' ? 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' :
-                              'bg-primary/10 text-primary border-primary/20'
+                            <span className={`text-[11px] px-3 py-1 rounded-full border font-extrabold uppercase tracking-tight shrink-0 ${
+                              statusStyles[event.status] || 'bg-zinc-700 text-white border-zinc-600'
                             }`}>
                               {event.status}
                             </span>
                           </div>
-                          <p className="text-zinc-400 flex items-center gap-2 text-sm">
-                            <UserIcon className="w-4 h-4 text-primary/60 shrink-0" />
+                          <p className="text-zinc-300 flex items-center gap-2 text-sm sm:text-base font-medium">
+                            <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
                             <span className="truncate">{event.client?.name}</span>
                           </p>
-                          <div className="flex flex-wrap gap-3 sm:gap-4 mt-2 sm:mt-2">
-                            <span className="text-xs sm:text-sm text-zinc-500 flex items-center gap-1.5">
-                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary/40 shrink-0" />
+                          <div className="flex flex-wrap gap-x-3 sm:gap-x-5 gap-y-2 mt-2.5 sm:mt-3">
+                            <span className="text-sm sm:text-base text-zinc-300 flex items-center gap-2 font-medium">
+                              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
                               {event.start_time.slice(0, 5)} - {event.end_time.slice(0, 5)}
                             </span>
-                            <span className="text-xs sm:text-sm text-zinc-500 flex items-center gap-1.5 max-w-full">
-                              <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary/40 shrink-0" />
-                              <span className="truncate max-w-[200px] sm:max-w-none">{event.address}</span>
+                            <span className="text-sm sm:text-base text-zinc-300 flex items-center gap-2 max-w-full font-medium">
+                              <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
+                              <span className="truncate max-w-[220px] sm:max-w-none">{event.address}</span>
                             </span>
-                            <span className="text-xs sm:text-sm text-zinc-500 flex items-center gap-1.5">
-                              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary/40 shrink-0" />
+                            <span className="text-sm sm:text-base text-zinc-300 flex items-center gap-2 font-medium">
+                              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
                               {event.guest_count} convidados
                             </span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex sm:flex-col items-stretch sm:items-end gap-2 sm:gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5 sm:border-0">
+                      <div className="flex sm:flex-col items-stretch sm:items-end gap-2 sm:gap-3 w-full sm:w-auto pt-3 sm:pt-0 mt-1 sm:mt-0 border-t sm:border-t-0 border-white/10 sm:border-0">
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button 
                               variant="outline" 
                               size="sm" 
                               onClick={() => setSelectedEvent(event)}
-                              className="flex-1 sm:flex-none border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 min-h-[44px] sm:min-h-0 flex items-center justify-center gap-2"
+                              className="flex-1 sm:flex-none border-primary/30 text-primary hover:text-white hover:bg-primary transition-all min-h-[48px] sm:min-h-[40px] flex items-center justify-center gap-2 text-sm font-bold px-5 sm:px-4 rounded-xl"
                             >
-                              <Info className="w-4 h-4 shrink-0" />
-                              Detalhes
+                              <Info className="w-4.5 h-4.5 shrink-0" />
+                              Ver Detalhes
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="bg-zinc-900 border-primary/20 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+                          <DialogContent className="bg-zinc-900 border-primary/30 text-white max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-[0_0_40px_rgba(188,19,254,0.2)]">
                             <DialogHeader>
-                              <DialogTitle className="text-xl sm:text-2xl font-bold neon-glow text-white break-words">{event.name}</DialogTitle>
-                              <DialogDescription className="text-zinc-400 text-sm">
+                              <DialogTitle className="text-2xl sm:text-3xl font-black neon-glow text-white break-words">{event.name}</DialogTitle>
+                              <DialogDescription className="text-zinc-400 text-sm sm:text-base">
                                 Detalhes completos do evento e do cliente.
                               </DialogDescription>
                             </DialogHeader>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 py-4 sm:py-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 py-5 sm:py-6">
                               <div className="space-y-3 sm:space-y-4">
-                                <h4 className="text-xs sm:text-sm font-bold text-primary uppercase tracking-widest border-b border-primary/20 pb-2">Informações do Evento</h4>
-                                <div className="space-y-2 sm:space-y-3">
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">Tipo:</span> <span className="text-white font-medium text-right">{event.type}</span></p>
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">Data:</span> <span className="text-white font-medium text-right">{new Date(event.date).toLocaleDateString('pt-BR')}</span></p>
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">Horário:</span> <span className="text-white font-medium text-right">{event.start_time.slice(0, 5)} às {event.end_time.slice(0, 5)}</span></p>
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">Convidados:</span> <span className="text-white font-medium text-right">{event.guest_count}</span></p>
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">Status:</span> <span className="text-white font-medium text-right">{event.status}</span></p>
-                                  <p className="text-xs sm:text-sm flex flex-col gap-1"><span className="text-zinc-500">Endereço:</span> <span className="text-white font-medium break-words">{event.address}</span></p>
+                                <h4 className="text-xs sm:text-sm font-black text-primary uppercase tracking-widest border-b border-primary/30 pb-2">Informações do Evento</h4>
+                                <div className="space-y-2.5 sm:space-y-3">
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">Tipo:</span> <span className="text-white font-bold text-right">{event.type}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">Data:</span> <span className="text-white font-bold text-right">{new Date(event.date).toLocaleDateString('pt-BR')}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">Horário:</span> <span className="text-white font-bold text-right">{event.start_time.slice(0, 5)} às {event.end_time.slice(0, 5)}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">Convidados:</span> <span className="text-white font-bold text-right">{event.guest_count}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">Status:</span> <span className={`font-black text-right px-2.5 py-0.5 rounded-full text-xs ${
+                                    statusStyles[event.status] || ''
+                                  }`}>{event.status}</span></p>
+                                  <p className="text-sm sm:text-base flex flex-col gap-1.5"><span className="text-zinc-400 font-medium">Endereço:</span> <span className="text-white font-bold break-words leading-relaxed">{event.address}</span></p>
                                 </div>
                               </div>
                               <div className="space-y-3 sm:space-y-4">
-                                <h4 className="text-xs sm:text-sm font-bold text-primary uppercase tracking-widest border-b border-primary/20 pb-2">Dados do Cliente</h4>
-                                <div className="space-y-2 sm:space-y-3">
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">Nome:</span> <span className="text-white font-medium text-right break-words max-w-[50%]">{event.client?.name}</span></p>
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">CPF/CNPJ:</span> <span className="text-white font-medium text-right">{event.client?.document}</span></p>
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">WhatsApp:</span> <span className="text-white font-medium text-right">{event.client?.whatsapp || event.client?.phone}</span></p>
-                                  <p className="text-xs sm:text-sm flex justify-between gap-2"><span className="text-zinc-500 shrink-0">E-mail:</span> <span className="text-white font-medium text-xs text-right break-all max-w-[55%]">{event.client?.email}</span></p>
+                                <h4 className="text-xs sm:text-sm font-black text-primary uppercase tracking-widest border-b border-primary/30 pb-2">Dados do Cliente</h4>
+                                <div className="space-y-2.5 sm:space-y-3">
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">Nome:</span> <span className="text-white font-bold text-right break-words max-w-[55%]">{event.client?.name}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">CPF/CNPJ:</span> <span className="text-white font-bold text-right">{event.client?.document}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">WhatsApp:</span> <span className="text-white font-bold text-right">{event.client?.whatsapp || event.client?.phone}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-zinc-400 shrink-0 font-medium">E-mail:</span> <span className="text-white font-bold text-right break-all max-w-[55%]">{event.client?.email}</span></p>
                                 </div>
                               </div>
-                              <div className="md:col-span-2 space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-white/5">
-                                <h4 className="text-xs sm:text-sm font-bold text-zinc-500 uppercase tracking-widest">Observações</h4>
-                                <p className="text-xs sm:text-sm text-zinc-300 bg-white/5 p-3 sm:p-4 rounded-lg italic leading-relaxed">
+                              <div className="md:col-span-2 space-y-3 sm:space-y-4 pt-4 sm:pt-5 mt-2 sm:mt-0 border-t border-white/10">
+                                <h4 className="text-xs sm:text-sm font-black text-zinc-500 uppercase tracking-widest">Observações</h4>
+                                <p className="text-sm sm:text-base text-zinc-200 bg-white/[0.05] p-4 sm:p-5 rounded-xl leading-relaxed border border-white/5">
                                   {event.observations || 'Nenhuma observação registrada para este evento.'}
                                 </p>
                               </div>
