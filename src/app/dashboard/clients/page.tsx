@@ -91,16 +91,17 @@ export default function ClientsPage() {
       </div>
 
       <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-white/5">
-            <TableRow className="hover:bg-transparent border-white/10">
-              <TableHead className="text-zinc-400">Cliente</TableHead>
-              <TableHead className="text-zinc-400">Documento</TableHead>
-              <TableHead className="text-zinc-400">Contato</TableHead>
-              <TableHead className="text-right text-zinc-400">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[700px]">
+            <TableHeader className="bg-white/5">
+              <TableRow className="hover:bg-transparent border-white/10">
+                <TableHead className="text-zinc-400">Cliente</TableHead>
+                <TableHead className="text-zinc-400">Documento</TableHead>
+                <TableHead className="text-zinc-400">Contato</TableHead>
+                <TableHead className="text-right text-zinc-400">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {loading ? (
               <TableRow>
                 <TableCell colSpan={4} className="h-32 text-center">
@@ -158,8 +159,9 @@ export default function ClientsPage() {
                 </TableRow>
               ))
             )}
-          </TableBody>
-        </Table>
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );

@@ -123,17 +123,18 @@ export default function FinancePage() {
         </div>
 
         <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden">
-          <Table>
-            <TableHeader className="bg-white/5">
-              <TableRow className="hover:bg-transparent border-white/10">
-                <TableHead className="text-zinc-400">Data</TableHead>
-                <TableHead className="text-zinc-400">Descrição</TableHead>
-                <TableHead className="text-zinc-400">Tipo</TableHead>
-                <TableHead className="text-zinc-400 text-right">Valor</TableHead>
-                <TableHead className="text-zinc-400 text-center">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[700px]">
+              <TableHeader className="bg-white/5">
+                <TableRow className="hover:bg-transparent border-white/10">
+                  <TableHead className="text-zinc-400">Data</TableHead>
+                  <TableHead className="text-zinc-400">Descrição</TableHead>
+                  <TableHead className="text-zinc-400">Tipo</TableHead>
+                  <TableHead className="text-zinc-400 text-right">Valor</TableHead>
+                  <TableHead className="text-zinc-400 text-center">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-32 text-center text-zinc-500">
@@ -184,7 +185,8 @@ export default function FinancePage() {
                 ))
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </div>
       </div>
     </div>

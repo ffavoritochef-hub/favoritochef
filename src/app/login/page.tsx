@@ -54,12 +54,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black overflow-hidden relative">
+    <div className="flex items-center justify-center min-h-screen bg-black overflow-hidden relative p-4">
       {/* Background Neon Orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px]" />
 
-      <Card className="w-[400px] bg-black/40 backdrop-blur-xl border-primary/30 neon-border z-10">
+      <Card className="w-full max-w-[400px] bg-black/40 backdrop-blur-xl border-primary/30 neon-border z-10">
         <CardHeader className="text-center space-y-1">
           <CardTitle className="text-3xl font-bold tracking-tighter neon-glow text-white">
             Agenda Buffet

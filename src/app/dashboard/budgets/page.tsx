@@ -87,18 +87,19 @@ export default function BudgetsPage() {
       </header>
 
       <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden">
-        <Table>
-          <TableHeader className="bg-white/5">
-            <TableRow className="hover:bg-transparent border-white/10">
-              <TableHead className="text-zinc-400">Evento / Cliente</TableHead>
-              <TableHead className="text-zinc-400">Cardápio</TableHead>
-              <TableHead className="text-zinc-400">Data Criação</TableHead>
-              <TableHead className="text-zinc-400 text-right">Valor Total</TableHead>
-              <TableHead className="text-zinc-400 text-center">Status Evento</TableHead>
-              <TableHead className="text-right text-zinc-400">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[800px]">
+            <TableHeader className="bg-white/5">
+              <TableRow className="hover:bg-transparent border-white/10">
+                <TableHead className="text-zinc-400">Evento / Cliente</TableHead>
+                <TableHead className="text-zinc-400">Cardápio</TableHead>
+                <TableHead className="text-zinc-400">Data Criação</TableHead>
+                <TableHead className="text-zinc-400 text-right">Valor Total</TableHead>
+                <TableHead className="text-zinc-400 text-center">Status Evento</TableHead>
+                <TableHead className="text-right text-zinc-400">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {loading ? (
               <TableRow>
                 <TableCell colSpan={5} className="h-32 text-center text-zinc-500">
@@ -175,7 +176,8 @@ export default function BudgetsPage() {
               ))
             )}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
     </div>
   );
