@@ -17,10 +17,21 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  const supabaseReady = typeof supabase !== 'undefined' && supabase !== null;
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (!supabaseReady) {
+      setError(
+        '⚠️ Sistema em configuração! Variáveis de ambiente do Supabase não foram configuradas na Vercel. ' +
+        'Acesse Vercel → Project Settings → Environment Variables e adicione NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+      );
+      setLoading(false);
+      return;
+    }
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -82,6 +93,20 @@ export default function LoginPage() {
                 className="bg-white/5 border-primary/20 focus:border-primary focus:ring-primary/50 transition-all text-white"
               />
             </div>
+
+            {!supabaseReady && (
+              <div className="text-sm text-yellow-300 bg-yellow-500/10 p-3 rounded border border-yellow-500/30 space-y-1">
+                <p className="font-bold">⚠️ Configuração pendente</p>
+                <p className="text-xs opacity-90">
+                  Variáveis de ambiente do Supabase não configuradas.<br/>
+                  Acesse o painel da Vercel → <b>Settings → Environment Variables</b> e adicione:
+                  <br/>• <code className="bg-black/30 px-1 rounded">NEXT_PUBLIC_SUPABASE_URL</code>
+                  <br/>• <code className="bg-black/30 px-1 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>
+                  <br/>Depois faça <b>Redeploy</b>.
+                </p>
+              </div>
+            )}
+
             {error && <p className="text-sm text-red-400 bg-red-400/10 p-2 rounded border border-red-400/20">{error}</p>}
           </CardContent>
           <CardFooter>
