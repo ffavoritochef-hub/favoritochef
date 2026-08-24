@@ -48,6 +48,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    if (typeof window !== 'undefined') {
+      window.location.assign('/login');
+    }
   };
 
   return (

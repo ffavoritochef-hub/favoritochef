@@ -4,10 +4,20 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   output: 'standalone',
+  experimental: {
+    optimizePackageImports: ['@supabase/supabase-js'],
+  },
+  serverExternalPackages: ['pdfkit', 'node:buffer'],
+  images: {
+    unoptimized: false,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;

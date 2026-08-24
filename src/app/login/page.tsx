@@ -22,16 +22,23 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      setError(error.message);
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+      } else {
+        router.refresh();
+        setLoading(false);
+        router.push('/dashboard');
+      }
+    } catch (err) {
+      setError((err as Error)?.message || 'Erro inesperado ao autenticar');
       setLoading(false);
-    } else {
-      router.push('/dashboard');
     }
   };
 

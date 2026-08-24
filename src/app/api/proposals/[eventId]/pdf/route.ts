@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import PDFDocument from 'pdfkit';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
@@ -10,6 +9,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const download = searchParams.get('download') === 'true';
 
   try {
+    const PDFKit = require('pdfkit');
+    const PDFDocument = PDFKit.default || PDFKit;
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         size: 'A4',
       });
 
-      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => {
         const pdfBuffer = Buffer.concat(chunks);
         const headers = new Headers();
@@ -112,7 +114,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .text(budget.menu_templates?.name || 'Personalizado')
         .moveDown(0.3);
 
-      const menuItems = budget.menu_templates?.items?.map(i =>
+      const menuItems = budget.menu_templates?.items?.map((i: { custom_item_name: string; custom_quantity: string }) =>
         `- ${i.custom_item_name} (${i.custom_quantity})`
       ).join('\n') || 'Nenhum item detalhado no cardápio.';
 
