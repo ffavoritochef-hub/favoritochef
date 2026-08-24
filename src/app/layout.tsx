@@ -18,6 +18,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Agenda Buffet - Sistema Gerencial",
   description: "Sistema completo para gestão de buffet e eventos",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
+  themeColor: "#000000",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Agenda Buffet",
+  },
 };
 
 export const dynamic = 'force-dynamic';

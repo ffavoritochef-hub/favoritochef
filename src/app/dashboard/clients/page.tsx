@@ -65,32 +65,88 @@ export default function ClientsPage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tighter neon-glow">Clientes</h1>
-          <p className="text-zinc-400 mt-1">Gerencie sua base de clientes e contatos.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tighter neon-glow">Clientes</h1>
+          <p className="text-zinc-400 mt-1 text-sm sm:text-base">Gerencie sua base de clientes e contatos.</p>
         </div>
-        <Link 
-          href="/dashboard/clients/new"
-          className="bg-primary hover:bg-primary/80 text-white font-bold transition-all shadow-[0_0_15px_rgba(188,19,254,0.3)] flex items-center gap-2 px-6 py-3 rounded-lg"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Novo Cliente
-        </Link>
+        <Button asChild className="bg-primary hover:bg-primary/80 text-white font-bold transition-all shadow-[0_0_15px_rgba(188,19,254,0.3)] flex items-center gap-2 w-full md:w-auto">
+          <Link href="/dashboard/clients/new">
+            <PlusCircle className="w-5 h-5 shrink-0" />
+            Novo Cliente
+          </Link>
+        </Button>
       </header>
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+        <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 shrink-0" />
         <Input 
           placeholder="Buscar por nome, e-mail ou documento..." 
-          className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-primary transition-all"
+          className="pl-11 sm:pl-12 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-primary transition-all"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden">
+      {/* Cards para mobile */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center h-32 text-zinc-500 rounded-xl border border-white/10 bg-white/5">
+            <div className="flex items-center justify-center gap-2 text-zinc-500">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+              <span className="text-sm">Carregando clientes...</span>
+            </div>
+          </div>
+        ) : filteredClients.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 text-zinc-500 italic rounded-xl border border-dashed border-white/10 bg-white/5 text-sm">
+            Nenhum cliente encontrado.
+          </div>
+        ) : (
+          filteredClients.map((client) => (
+            <div key={client.id} className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm hover:border-primary/30 transition-colors">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
+                  <UserIcon className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold text-white truncate">{client.name}</p>
+                  </div>
+                  {client.document && (
+                    <p className="text-xs text-zinc-400 font-mono mt-0.5">{client.document}</p>
+                  )}
+                  <div className="mt-3 space-y-1.5">
+                    {client.phone && (
+                      <div className="flex items-center gap-2 text-sm text-zinc-400">
+                        <Phone className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="truncate">{client.phone}</span>
+                      </div>
+                    )}
+                    {client.email && (
+                      <div className="flex items-center gap-2 text-sm text-zinc-400">
+                        <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="truncate text-xs">{client.email}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-white/5">
+                    <Button variant="ghost" size="icon-sm" className="text-zinc-400 hover:text-primary hover:bg-primary/10">
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" className="text-zinc-400 hover:text-red-400 hover:bg-red-400/10">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tabela para desktop */}
+      <div className="hidden md:block rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden">
         <div className="overflow-x-auto">
           <Table className="min-w-[700px]">
             <TableHeader className="bg-white/5">
