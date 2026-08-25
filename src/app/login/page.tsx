@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { UtensilsCrossed, AlertTriangle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export default function LoginPage() {
 
     if (!supabaseReady) {
       setError(
-        '⚠️ Sistema em configuração! Variáveis de ambiente do Supabase não foram configuradas na Vercel. ' +
+        'Sistema em configuração! Variáveis de ambiente do Supabase não foram configuradas na Vercel. ' +
         'Acesse Vercel → Project Settings → Environment Variables e adicione NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.'
       );
       setLoading(false);
@@ -54,73 +55,103 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black overflow-hidden relative p-4 sm:p-6">
-      {/* Background Neon Orbs */}
-      <div className="absolute top-[-10%] left-[-20%] w-[70%] h-[50%] bg-primary/20 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-20%] w-[70%] h-[50%] bg-primary/20 rounded-full blur-[120px] pointer-events-none" />
+    <div className="flex items-center justify-center min-h-screen bg-background p-4 sm:p-6 relative overflow-hidden">
+      <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[50%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[50%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
 
-      <Card className="w-full max-w-[400px] bg-black/50 backdrop-blur-xl border-primary/30 neon-border z-10 shadow-2xl">
-        <CardHeader className="text-center space-y-2 px-5 sm:px-6 pt-6 sm:pt-8">
-          <CardTitle className="text-3xl sm:text-4xl font-bold tracking-tighter neon-glow text-white">
-            Agenda Buffet
-          </CardTitle>
-          <CardDescription className="text-zinc-400 text-sm sm:text-base">
-            Entre para gerenciar seus eventos com estilo.
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleLogin}>
-          <CardContent className="space-y-5 sm:space-y-4 px-5 sm:px-6 py-4 sm:py-6">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-zinc-300">E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-white/5 border-primary/20 focus:border-primary focus:ring-primary/50 transition-all text-white placeholder:text-zinc-600"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-zinc-300">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="bg-white/5 border-primary/20 focus:border-primary focus:ring-primary/50 transition-all text-white"
-              />
-            </div>
+      <div className="w-full max-w-[400px] relative z-10 space-y-6">
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto shadow-lg shadow-primary/20">
+            <UtensilsCrossed className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              Agenda Buffet
+            </h1>
+            <p className="text-sm text-slate-500 mt-1.5">
+              Sistema de gestão para buffets e eventos
+            </p>
+          </div>
+        </div>
 
-            {!supabaseReady && (
-              <div className="text-sm text-yellow-300 bg-yellow-500/10 p-3 sm:p-4 rounded-lg border border-yellow-500/30 space-y-2">
-                <p className="font-bold text-sm sm:text-base">⚠️ Configuração pendente</p>
-                <p className="text-xs sm:text-sm opacity-90 leading-relaxed">
-                  Variáveis de ambiente do Supabase não configuradas.<br/>
-                  Acesse o painel da Vercel → <b>Settings → Environment Variables</b> e adicione:
-                  <br/>• <code className="bg-black/40 px-1.5 py-0.5 rounded text-xs">NEXT_PUBLIC_SUPABASE_URL</code>
-                  <br/>• <code className="bg-black/40 px-1.5 py-0.5 rounded text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>
-                  <br/>Depois faça <b>Redeploy</b>.
-                </p>
+        <Card className="shadow-card border-border bg-white">
+          <CardHeader className="text-center space-y-1.5 px-5 sm:px-6 pt-6 sm:pt-7">
+            <CardTitle className="text-xl font-bold text-slate-900">
+              Acessar sua conta
+            </CardTitle>
+            <CardDescription className="text-sm text-slate-500">
+              Entre com seu e-mail e senha para continuar
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={handleLogin}>
+            <CardContent className="space-y-4 px-5 sm:px-6 py-4 sm:py-5">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium text-slate-700">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12 bg-white border-border focus:border-primary focus:ring-primary/20 text-slate-900 placeholder:text-slate-400 rounded-xl"
+                />
               </div>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium text-slate-700">Senha</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-12 bg-white border-border focus:border-primary focus:ring-primary/20 text-slate-900 rounded-xl"
+                />
+              </div>
 
-            {error && <p className="text-sm text-red-400 bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</p>}
-          </CardContent>
-          <CardFooter className="px-5 sm:px-6 pb-6 sm:pb-8 pt-0">
-            <Button 
-              type="submit" 
-              size="lg"
-              className="w-full bg-primary hover:bg-primary/80 text-white font-bold transition-all shadow-[0_0_20px_rgba(188,19,254,0.3)] hover:shadow-[0_0_30px_rgba(188,19,254,0.5)]" 
-              disabled={loading}
-            >
-              {loading ? 'Autenticando...' : 'Acessar Sistema'}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+              {!supabaseReady && (
+                <div className="text-sm bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-800 text-sm">Configuração pendente</p>
+                      <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                        Variáveis de ambiente do Supabase não configuradas.<br/>
+                        Acesse o painel da Vercel → Settings → Environment Variables e adicione:
+                        <br/>• <code className="bg-white px-1.5 py-0.5 rounded text-[11px] border border-amber-200">NEXT_PUBLIC_SUPABASE_URL</code>
+                        <br/>• <code className="bg-white px-1.5 py-0.5 rounded text-[11px] border border-amber-200">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>
+                        <br/>Depois faça Redeploy.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="text-sm bg-destructive/5 text-destructive p-3.5 rounded-xl border border-destructive/20 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{error}</span>
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="px-5 sm:px-6 pb-6 sm:pb-7 pt-0">
+              <Button 
+                type="submit" 
+                size="lg"
+                className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl shadow-sm shadow-primary/20 transition-all" 
+                disabled={loading}
+              >
+                {loading ? 'Autenticando...' : 'Entrar no Sistema'}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+
+        <p className="text-center text-xs text-slate-400">
+          © 2026 Agenda Buffet. Todos os direitos reservados.
+        </p>
+      </div>
     </div>
   );
 }

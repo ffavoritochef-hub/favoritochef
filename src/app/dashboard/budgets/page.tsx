@@ -22,12 +22,12 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 
 const statusStyles: Record<string, string> = {
-  'Orçamento enviado': 'bg-sky-500 text-white border-sky-400 shadow-[0_0_8px_rgba(14,165,233,0.4)]',
-  'Aguardando aprovação': 'bg-amber-500 text-zinc-950 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.45)]',
-  'Aprovado': 'bg-emerald-500 text-white border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.45)]',
-  'Em andamento': 'bg-violet-500 text-white border-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.5)]',
-  'Finalizado': 'bg-zinc-600 text-white border-zinc-500',
-  'Cancelado': 'bg-rose-500 text-white border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.45)]',
+  'Orçamento enviado': 'bg-sky-600 text-white border-sky-600 rounded-full',
+  'Aguardando aprovação': 'bg-warning text-white border-warning rounded-full',
+  'Aprovado': 'bg-success text-white border-success rounded-full',
+  'Em andamento': 'bg-highlight text-white border-highlight rounded-full',
+  'Finalizado': 'bg-slate-500 text-white border-slate-500 rounded-full',
+  'Cancelado': 'bg-destructive text-white border-destructive rounded-full',
 };
 
 export default function BudgetsPage() {
@@ -81,10 +81,10 @@ export default function BudgetsPage() {
     <div className="w-full space-y-4 sm:space-y-8 -mx-1 px-1 sm:mx-0 sm:px-0">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 px-1 sm:px-0">
         <div className="w-full">
-          <h1 className="text-xl sm:text-3xl font-bold tracking-tight neon-glow">Orçamentos</h1>
-          <p className="text-zinc-400 mt-1 text-xs sm:text-base leading-relaxed">Gere e gerencie propostas comerciais para seus eventos.</p>
+          <h1 className="text-xl sm:text-3xl font-bold text-slate-900 tracking-tight">Orçamentos</h1>
+          <p className="text-slate-500 mt-1 text-xs sm:text-base leading-relaxed">Gere e gerencie propostas comerciais para seus eventos.</p>
         </div>
-        <Button asChild className="bg-primary hover:bg-primary/85 text-white font-extrabold transition-all shadow-[0_0_20px_rgba(188,19,254,0.35)] flex items-center gap-2 w-full md:w-auto min-h-[48px] px-5 rounded-xl text-base">
+        <Button asChild className="bg-primary hover:bg-primary-dark text-white rounded-xl h-12 font-semibold shadow-sm flex items-center gap-2 w-full md:w-auto px-5 text-base">
           <Link href="/dashboard/budgets/new">
             <PlusCircle className="w-5 h-5 shrink-0" />
             Novo Orçamento
@@ -94,47 +94,47 @@ export default function BudgetsPage() {
 
       <div className="md:hidden space-y-3 w-full">
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-64 text-zinc-400 gap-4 rounded-2xl border border-white/10 bg-white/[0.04] mx-1">
+          <div className="flex flex-col items-center justify-center h-64 text-slate-500 gap-4 rounded-2xl border-border bg-white mx-1">
             <div className="animate-spin rounded-full h-10 w-10 border-b-[3px] border-primary"></div>
             <p className="text-sm font-medium">Carregando orçamentos...</p>
           </div>
         ) : budgets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.03] text-zinc-400 p-6 text-center mx-1">
-            <FileText className="w-14 h-14 mb-4 opacity-30 shrink-0 text-primary/50" />
-            <p className="text-base sm:text-lg font-medium text-white/80">Nenhum orçamento gerado.</p>
-            <p className="text-xs sm:text-sm text-zinc-500 mt-2">Clique em &quot;Novo Orçamento&quot; para começar.</p>
+          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-border rounded-2xl bg-white text-slate-500 p-6 text-center mx-1">
+            <FileText className="w-14 h-14 mb-4 shrink-0 text-primary/40" />
+            <p className="text-base sm:text-lg font-semibold text-slate-900">Nenhum orçamento gerado.</p>
+            <p className="text-xs sm:text-sm text-slate-500 mt-2">Clique em &quot;Novo Orçamento&quot; para começar.</p>
           </div>
         ) : (
           budgets.map((budget) => (
-            <div key={budget.id} className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] backdrop-blur-sm p-4 sm:p-5 hover:from-white/[0.09] hover:to-white/[0.04] transition-all duration-200 hover:border-primary/40 hover:shadow-[0_0_25px_rgba(188,19,254,0.12)] w-full">
+            <div key={budget.id} className="bg-white border-border shadow-card rounded-2xl p-4 sm:p-5 hover:shadow-card-hover w-full transition-shadow">
               <div className="space-y-4 w-full">
                 <div className="flex items-start justify-between gap-3 w-full">
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-white text-lg sm:text-xl truncate">{budget.events?.name}</p>
-                    <p className="text-xs sm:text-sm text-zinc-400 truncate font-medium">{budget.events?.client?.name}</p>
+                    <p className="font-bold text-slate-900 text-lg truncate">{budget.events?.name}</p>
+                    <p className="text-sm text-slate-500 truncate font-medium">{budget.events?.client?.name}</p>
                   </div>
-                  <span className={`text-[11px] px-3 py-1 rounded-full border font-extrabold uppercase tracking-tight shrink-0 ${
-                    statusStyles[budget.events?.status] || 'bg-zinc-700 text-white border-zinc-600'
+                  <span className={`text-[11px] px-3 py-1 border font-semibold uppercase tracking-tight shrink-0 ${
+                    statusStyles[budget.events?.status] || 'bg-slate-500 text-white border-slate-500 rounded-full'
                   }`}>
                     {budget.events?.status}
                   </span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/10">
+                <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 mt-3">
                   <div>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Cardápio</p>
-                    <p className="text-sm sm:text-base text-zinc-200 truncate font-semibold mt-0.5">{budget.menu_templates?.name || 'Personalizado'}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Cardápio</p>
+                    <p className="text-sm sm:text-base text-slate-700 truncate font-semibold mt-0.5">{budget.menu_templates?.name || 'Personalizado'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Criado em</p>
-                    <p className="text-sm sm:text-base text-zinc-200 font-semibold mt-0.5">{new Date(budget.created_at).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Criado em</p>
+                    <p className="text-sm sm:text-base text-slate-700 font-semibold mt-0.5">{new Date(budget.created_at).toLocaleDateString('pt-BR')}</p>
                   </div>
                 </div>
                 
-                <div className="flex items-end justify-between pt-3 border-t border-white/10">
+                <div className="flex items-end justify-between border-t border-slate-100 pt-3 mt-3">
                   <div>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Valor Total</p>
-                    <p className="text-xl sm:text-2xl font-black text-primary neon-glow break-all">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Valor Total</p>
+                    <p className="text-xl sm:text-2xl font-bold text-primary break-all">
                       R$ {Number(budget.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
@@ -142,7 +142,7 @@ export default function BudgetsPage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="text-primary border-primary/30 hover:bg-primary hover:text-white h-11 w-11 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl"
+                      className="border-primary/20 text-primary hover:bg-primary hover:text-white h-11 w-11 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center"
                       onClick={() => handleDownloadPdf(budget.event_id)}
                       title="Baixar PDF"
                     >
@@ -151,7 +151,7 @@ export default function BudgetsPage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="text-emerald-400 border-emerald-400/30 hover:bg-emerald-500 hover:text-white h-11 w-11 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl"
+                      className="border-success/20 text-success hover:bg-success hover:text-white h-11 w-11 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center"
                       onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
                       title="Enviar WhatsApp"
                     >
@@ -160,7 +160,7 @@ export default function BudgetsPage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="text-zinc-300 border-white/20 hover:bg-white/10 hover:text-white h-11 w-11 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl"
+                      className="border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 h-11 w-11 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center"
                       onClick={() => handleViewPdf(budget.event_id)}
                       title="Visualizar Proposta"
                     >
@@ -174,24 +174,24 @@ export default function BudgetsPage() {
         )}
       </div>
 
-      <div className="hidden md:block rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] backdrop-blur-sm overflow-hidden">
+      <div className="hidden md:block bg-white border-border shadow-card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <Table className="min-w-[800px]">
-            <TableHeader className="bg-white/[0.05]">
-              <TableRow className="hover:bg-transparent border-white/10">
-                <TableHead className="text-zinc-300 font-bold text-sm">Evento / Cliente</TableHead>
-                <TableHead className="text-zinc-300 font-bold text-sm">Cardápio</TableHead>
-                <TableHead className="text-zinc-300 font-bold text-sm">Data Criação</TableHead>
-                <TableHead className="text-zinc-300 font-bold text-sm text-right">Valor Total</TableHead>
-                <TableHead className="text-zinc-300 font-bold text-sm text-center">Status Evento</TableHead>
-                <TableHead className="text-right text-zinc-300 font-bold text-sm">Ações</TableHead>
+            <TableHeader className="bg-slate-50">
+              <TableRow className="hover:bg-transparent border-slate-100">
+                <TableHead className="text-slate-600 font-semibold text-sm">Evento / Cliente</TableHead>
+                <TableHead className="text-slate-600 font-semibold text-sm">Cardápio</TableHead>
+                <TableHead className="text-slate-600 font-semibold text-sm">Data Criação</TableHead>
+                <TableHead className="text-slate-600 font-semibold text-sm text-right">Valor Total</TableHead>
+                <TableHead className="text-slate-600 font-semibold text-sm text-center">Status Evento</TableHead>
+                <TableHead className="text-right text-slate-600 font-semibold text-sm">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-zinc-400">
-                  <div className="flex items-center justify-center gap-2 text-zinc-400">
+                <TableCell colSpan={6} className="h-32 text-center text-slate-500">
+                  <div className="flex items-center justify-center gap-2 text-slate-500">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                     <span className="text-sm font-medium">Carregando orçamentos...</span>
                   </div>
@@ -199,33 +199,33 @@ export default function BudgetsPage() {
               </TableRow>
             ) : budgets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-zinc-400 italic font-medium">
+                <TableCell colSpan={6} className="h-32 text-center text-slate-500 italic font-medium">
                   Nenhum orçamento gerado.
                 </TableCell>
               </TableRow>
             ) : (
               budgets.map((budget) => (
-                <TableRow key={budget.id} className="hover:bg-white/[0.05] border-white/5 transition-colors">
+                <TableRow key={budget.id} className="hover:bg-slate-50/50 border-slate-100 transition-colors">
                   <TableCell>
                     <div>
-                      <p className="font-bold text-white text-base">{budget.events?.name}</p>
-                      <p className="text-xs sm:text-sm text-zinc-400 font-medium">{budget.events?.client?.name}</p>
+                      <p className="font-bold text-slate-900 text-base">{budget.events?.name}</p>
+                      <p className="text-xs sm:text-sm text-slate-500 font-medium">{budget.events?.client?.name}</p>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-zinc-200 text-sm font-semibold">
+                    <span className="text-slate-700 text-sm font-semibold">
                       {budget.menu_templates?.name || 'Personalizado'}
                     </span>
                   </TableCell>
-                  <TableCell className="text-zinc-300 text-sm font-semibold">
+                  <TableCell className="text-slate-600 text-sm font-semibold">
                     {new Date(budget.created_at).toLocaleDateString('pt-BR')}
                   </TableCell>
-                  <TableCell className="text-right font-black text-white text-base">
+                  <TableCell className="text-right font-bold text-slate-900 text-base">
                     R$ {Number(budget.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </TableCell>
                   <TableCell className="text-center">
-                     <span className={`text-[11px] px-3 py-1 rounded-full border font-extrabold uppercase tracking-tight ${
-                        statusStyles[budget.events?.status] || 'bg-zinc-700 text-white border-zinc-600'
+                     <span className={`text-[11px] px-3 py-1 border font-semibold uppercase tracking-tight ${
+                        statusStyles[budget.events?.status] || 'bg-slate-500 text-white border-slate-500 rounded-full'
                       }`}>
                         {budget.events?.status}
                       </span>
@@ -235,7 +235,7 @@ export default function BudgetsPage() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="text-zinc-400 hover:text-primary hover:bg-primary/10 h-10 w-10"
+                        className="text-slate-400 hover:text-primary hover:bg-primary/5 h-10 w-10 rounded-lg"
                         onClick={() => handleDownloadPdf(budget.event_id)}
                         title="Baixar PDF"
                       >
@@ -244,7 +244,7 @@ export default function BudgetsPage() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="text-zinc-400 hover:text-emerald-400 hover:bg-emerald-400/10 h-10 w-10"
+                        className="text-slate-400 hover:text-success hover:bg-success/5 h-10 w-10 rounded-lg"
                         onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
                         title="Enviar WhatsApp"
                       >
@@ -253,7 +253,7 @@ export default function BudgetsPage() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="text-zinc-400 hover:text-white hover:bg-white/10 h-10 w-10"
+                        className="text-slate-400 hover:text-slate-900 hover:bg-slate-50 h-10 w-10 rounded-lg"
                         onClick={() => handleViewPdf(budget.event_id)}
                         title="Visualizar Proposta"
                       >
