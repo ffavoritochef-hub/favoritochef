@@ -9,7 +9,10 @@ import {
   Clock, 
   MapPin, 
   Users,
-  BadgeCheck
+  BadgeCheck,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -26,22 +29,39 @@ const statusStyles: Record<string, string> = {
 
 export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([]);
+  const [expensesByEvent, setExpensesByEvent] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchEvents();
+    fetchData();
   }, []);
 
-  async function fetchEvents() {
+  async function fetchData() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: eventsData, error: eventsError } = await supabase
         .from('events')
         .select('*, client:clients(name)')
         .order('date', { ascending: true });
 
-      if (error) throw error;
-      setEvents(data || []);
+      if (eventsError) throw eventsError;
+      setEvents(eventsData || []);
+
+      const { data: expensesData, error: expensesError } = await supabase
+        .from('finance_transactions')
+        .select('event_id, amount')
+        .eq('type', 'payable')
+        .not('event_id', 'is', null);
+
+      if (expensesError) throw expensesError;
+
+      const map: Record<string, number> = {};
+      (expensesData || []).forEach((row: any) => {
+        if (row.event_id) {
+          map[row.event_id] = (map[row.event_id] || 0) + Number(row.amount || 0);
+        }
+      });
+      setExpensesByEvent(map);
     } catch (error: any) {
       toast.error('Erro ao carregar eventos: ' + error.message);
     } finally {
@@ -77,57 +97,105 @@ export default function EventsPage() {
             <p className="text-xs sm:text-sm text-slate-500 mt-2">Clique em &quot;Agendar Evento&quot; para começar.</p>
           </div>
         ) : (
-          events.map((event) => (
-            <div 
-              key={event.id} 
-              className="group bg-white border-border shadow-card rounded-2xl p-4 sm:p-6 hover:shadow-card-hover transition-all w-full"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-5 w-full">
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-5 w-full">
-                  <div className="flex flex-row sm:flex-col items-center sm:justify-center gap-1 sm:gap-0 w-full sm:w-auto px-4 py-3.5 sm:px-0 sm:py-0 sm:w-24 sm:h-24 rounded-xl bg-primary/10 border-primary/20 shrink-0">
-                    <span className="text-3xl sm:text-3xl font-bold leading-none text-slate-900">{new Date(event.date).getDate()}</span>
-                    <span className="text-[11px] sm:text-xs uppercase font-bold tracking-widest text-primary">
-                      {new Date(event.date).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}
-                    </span>
-                  </div>
-                  <div className="space-y-2 sm:space-y-1.5 flex-1 min-w-0 w-full">
-                    <div className="flex flex-wrap items-start gap-2 sm:gap-3 w-full">
-                      <h3 className="text-lg sm:text-xl font-bold text-slate-900 hover:text-primary transition-colors break-words">{event.name}</h3>
-                      <Badge className={`${statusStyles[event.status] || 'bg-slate-700 text-white border-slate-600'} border font-semibold text-[11px] shrink-0 px-3 py-1 uppercase tracking-tight`}>
-                        {event.status}
-                      </Badge>
-                    </div>
-                    <p className="text-slate-600 flex items-center gap-2 text-sm sm:text-base font-medium">
-                      <BadgeCheck className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
-                      <span className="truncate">{event.client?.name}</span>
-                    </p>
-                    <div className="flex flex-wrap gap-x-3 sm:gap-x-5 gap-y-2 mt-2.5 sm:mt-3">
-                      <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium">
-                        <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
-                        {event.start_time.slice(0, 5)} - {event.end_time.slice(0, 5)}
-                      </span>
-                      <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 max-w-full font-medium">
-                        <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
-                        <span className="truncate max-w-[220px] sm:max-w-none">{event.address}</span>
-                      </span>
-                      <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium">
-                        <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
-                        {event.guest_count} convidados
+          events.map((event) => {
+            const agreedValue = Number(event.agreed_value || 0);
+            const totalExpenses = expensesByEvent[event.id] || 0;
+            const balance = agreedValue - totalExpenses;
+            const hasFinance = agreedValue > 0 || totalExpenses > 0;
+
+            return (
+              <div 
+                key={event.id} 
+                className="group bg-white border-border shadow-card rounded-2xl p-4 sm:p-6 hover:shadow-card-hover transition-all w-full"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-5 w-full">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-5 w-full">
+                    <div className="flex flex-row sm:flex-col items-center sm:justify-center gap-1 sm:gap-0 w-full sm:w-auto px-4 py-3.5 sm:px-0 sm:py-0 sm:w-24 sm:h-24 rounded-xl bg-primary/10 border-primary/20 shrink-0">
+                      <span className="text-3xl sm:text-3xl font-bold leading-none text-slate-900">{new Date(event.date).getDate()}</span>
+                      <span className="text-[11px] sm:text-xs uppercase font-bold tracking-widest text-primary">
+                        {new Date(event.date).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}
                       </span>
                     </div>
+                    <div className="space-y-2 sm:space-y-1.5 flex-1 min-w-0 w-full">
+                      <div className="flex flex-wrap items-start gap-2 sm:gap-3 w-full">
+                        <h3 className="text-lg sm:text-xl font-bold text-slate-900 hover:text-primary transition-colors break-words">{event.name}</h3>
+                        <Badge className={`${statusStyles[event.status] || 'bg-slate-700 text-white border-slate-600'} border font-semibold text-[11px] shrink-0 px-3 py-1 uppercase tracking-tight`}>
+                          {event.status}
+                        </Badge>
+                      </div>
+                      <p className="text-slate-600 flex items-center gap-2 text-sm sm:text-base font-medium">
+                        <BadgeCheck className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
+                        <span className="truncate">{event.client?.name}</span>
+                      </p>
+                      <div className="flex flex-wrap gap-x-3 sm:gap-x-5 gap-y-2 mt-2.5 sm:mt-3">
+                        <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium">
+                          <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
+                          {event.start_time.slice(0, 5)} - {event.end_time.slice(0, 5)}
+                        </span>
+                        <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 max-w-full font-medium">
+                          <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
+                          <span className="truncate max-w-[220px] sm:max-w-none">{event.address}</span>
+                        </span>
+                        <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium">
+                          <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
+                          {event.guest_count} convidados
+                        </span>
+                      </div>
+                      {hasFinance && (
+                        <div className="mt-3.5 sm:mt-4 pt-3 sm:pt-3.5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                              <DollarSign className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Acordado</p>
+                              <p className="text-sm font-bold text-slate-900 truncate">R$ {agreedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${balance >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                              {balance >= 0 ? (
+                                <TrendingUp className="w-4 h-4 text-success" />
+                              ) : (
+                                <TrendingDown className="w-4 h-4 text-destructive" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Saldo</p>
+                              <p className={`text-sm font-bold truncate ${balance >= 0 ? 'text-success' : 'text-destructive'}`}>
+                                {balance >= 0 ? '+' : '-'} R$ {Math.abs(balance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                              <span className="text-[10px] font-bold text-destructive">-</span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Gastos</p>
+                              <p className="text-sm font-bold text-destructive truncate">- R$ {totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-3 w-full sm:w-auto pt-3 sm:pt-0 mt-1 sm:mt-0 border-t sm:border-t-0 border-border sm:border-0">
-                  <Button variant="outline" size="sm" className="flex-1 sm:flex-none border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl h-12 sm:h-10 font-semibold px-5">
-                    Detalhes
-                  </Button>
-                  <Button size="sm" className="flex-1 sm:flex-none bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-white rounded-xl h-12 sm:h-10 font-semibold px-5">
-                    Orçamento
-                  </Button>
+                  <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-3 w-full sm:w-auto pt-3 sm:pt-0 mt-1 sm:mt-0 border-t sm:border-t-0 border-border sm:border-0">
+                    <Button asChild variant="outline" size="sm" className="flex-1 sm:flex-none border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl h-12 sm:h-10 font-semibold px-5">
+                      <Link href={`/dashboard/events/${event.id}`}>
+                        Detalhes
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" className="flex-1 sm:flex-none bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-white rounded-xl h-12 sm:h-10 font-semibold px-5">
+                      <Link href={`/dashboard/budgets/new?eventId=${event.id}`}>
+                        Orçamento
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
