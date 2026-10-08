@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Home,
   MoreHorizontal,
+  HardHat,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -35,17 +36,21 @@ const menuItems = [
   { title: 'Clientes', icon: Users, url: '/dashboard/clients' },
   { title: 'Eventos', icon: Calendar, url: '/dashboard/events' },
   { title: 'Agenda', icon: Calendar, url: '/dashboard/agenda' },
+  { title: 'Funcionários', icon: HardHat, url: '/dashboard/employees' },
   { title: 'Cardápio', icon: Utensils, url: '/dashboard/menu' },
   { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets' },
   { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance' },
 ];
+
+const isRouteActive = (pathname: string, url: string) =>
+  url === '/dashboard' ? pathname === url : pathname === url || pathname.startsWith(url + '/');
 
 const bottomNavItems = [
   { title: 'Início', icon: Home, url: '/dashboard' },
   { title: 'Eventos', icon: Calendar, url: '/dashboard/events' },
   { title: 'Clientes', icon: Users, url: '/dashboard/clients' },
   { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets' },
-  { title: 'Mais', icon: MoreHorizontal, url: '/dashboard/menu' },
+  { title: 'Mais', icon: MoreHorizontal, url: '#more' },
 ];
 
 function SidebarContent({
@@ -67,7 +72,7 @@ function SidebarContent({
       <nav className="flex-1 p-3 sm:p-4 space-y-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.url;
+          const isActive = isRouteActive(pathname, item.url);
 
           return (
             <Link
@@ -177,8 +182,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         <div className={cn(
-          "flex-1 relative w-full max-w-full",
-          isMobile ? "pb-20 pt-4 px-3" : "p-6 lg:p-8"
+          "flex-1 relative w-full",
+          isMobile ? "pb-20 pt-4 px-3 max-w-full" : "p-6 lg:p-8 mx-auto w-full max-w-[1600px]"
         )}>
           {children}
         </div>
@@ -188,20 +193,27 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center justify-around h-16 px-1">
               {bottomNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.url;
-                return (
-                  <Link
-                    key={item.title}
-                    href={item.url}
-                    className={cn(
-                      'flex flex-col items-center justify-center gap-0.5 h-full flex-1 min-w-0 transition-colors',
-                      isActive ? 'text-primary' : 'text-slate-400'
-                    )}
-                  >
+                const isMore = item.url === '#more';
+                const isActive = !isMore && isRouteActive(pathname, item.url);
+                const cls = cn(
+                  'flex flex-col items-center justify-center gap-0.5 h-full flex-1 min-w-0 transition-colors',
+                  isActive ? 'text-primary' : 'text-slate-400'
+                );
+                const inner = (
+                  <>
                     <Icon className={cn('w-5 h-5 shrink-0', isActive ? 'text-primary' : '')} />
                     <span className={cn('text-[10px] font-semibold truncate max-w-full px-1', isActive ? 'text-primary' : '')}>
                       {item.title}
                     </span>
+                  </>
+                );
+                return isMore ? (
+                  <button key={item.title} type="button" className={cls} onClick={() => setMobileMenuOpen(true)} aria-label="Abrir menu completo">
+                    {inner}
+                  </button>
+                ) : (
+                  <Link key={item.title} href={item.url} className={cls} aria-current={isActive ? 'page' : undefined}>
+                    {inner}
                   </Link>
                 );
               })}

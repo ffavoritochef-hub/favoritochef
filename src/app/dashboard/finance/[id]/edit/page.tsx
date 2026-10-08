@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,10 +18,14 @@ import { ChevronLeft, Save, DollarSign, ArrowUpRight, ArrowDownRight, CalendarDa
 import { toast } from 'sonner';
 import Link from 'next/link';
 
-export default function NewTransactionPage() {
-  const [loading, setLoading] = useState(false);
-  const [events, setEvents] = useState<any[]>([]);
+export default function EditTransactionPage() {
   const router = useRouter();
+  const params = useParams();
+  const transactionId = params.id as string;
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     description: '',
     amount: 0,
@@ -31,18 +35,46 @@ export default function NewTransactionPage() {
     event_id: '' as string | ''
   });
 
-  async function fetchEvents() {
-    const { data } = await supabase
-      .from('events')
-      .select('id, name, date')
-      .eq('is_active', true)
-      .order('date', { ascending: false });
-    setEvents(data || []);
+  async function fetchAll() {
+    try {
+      setLoading(true);
+      const [tRes, eRes] = await Promise.all([
+        supabase
+          .from('finance_transactions')
+          .select('*')
+          .eq('id', transactionId)
+          .single(),
+        supabase
+          .from('events')
+          .select('id, name, date')
+          .order('date', { ascending: false }),
+      ]);
+      if (tRes.error) throw tRes.error;
+      if (!tRes.data) {
+        toast.error('Transação não encontrada.');
+        router.push('/dashboard/finance');
+        return;
+      }
+      const t = tRes.data;
+      setFormData({
+        description: t.description || '',
+        amount: Number(t.amount || 0),
+        type: t.type === 'payable' ? 'payable' : 'receivable',
+        date: t.date,
+        status: t.status || 'pago',
+        event_id: t.event_id || ''
+      });
+      setEvents(eRes.data || []);
+    } catch (error: any) {
+      toast.error('Erro ao carregar transação: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    fetchAll();
+  }, [transactionId]);
 
   const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -55,30 +87,38 @@ export default function NewTransactionPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
+    setSaving(true);
     try {
       const payload = {
         ...formData,
         event_id: formData.event_id || null
       };
-
       const { error } = await supabase
         .from('finance_transactions')
-        .insert([payload]);
-
+        .update(payload)
+        .eq('id', transactionId);
       if (error) throw error;
-
-      toast.success('Transação registrada com sucesso!');
+      toast.success('Transação atualizada com sucesso!');
       router.push('/dashboard/finance');
     } catch (error: any) {
-      toast.error('Erro ao registrar transação: ' + error.message);
+      toast.error('Erro ao atualizar transação: ' + error.message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   const isReceivable = formData.type === 'receivable';
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-16 sm:pb-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-12 bg-slate-200 rounded-2xl w-1/2"></div>
+          <div className="h-96 bg-slate-200 rounded-2xl"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-16 sm:pb-8">
@@ -90,8 +130,8 @@ export default function NewTransactionPage() {
             </Link>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Nova Transação</h1>
-            <p className="text-sm sm:text-base text-slate-500 truncate">Registre uma entrada ou saída de caixa.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Editar Transação</h1>
+            <p className="text-sm sm:text-base text-slate-500 truncate">Atualize os dados da movimentação financeira.</p>
           </div>
         </div>
       </header>
@@ -108,7 +148,7 @@ export default function NewTransactionPage() {
                   Dados da Transação
                 </CardTitle>
                 <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
-                  Preencha os campos abaixo para registrar um movimento financeiro.
+                  Altere os campos abaixo para atualizar a transação.
                 </CardDescription>
               </div>
               <div className={`pl-0 sm:pl-6 pt-1 sm:pt-0 sm:border-l sm:border-border ${
@@ -237,13 +277,13 @@ export default function NewTransactionPage() {
 
               <div className="field-group lg:col-span-12">
                 <Label>Status da Transação</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 max-w-2xl">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-3xl">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setFormData({ ...formData, status: 'pago' })}
+                    onClick={() => setFormData({ ...formData, status: isReceivable ? 'recebido' : 'pago' })}
                     className={`h-auto py-3 sm:py-4 border-2 transition-all ${
-                      formData.status === 'pago'
+                      (formData.status === 'pago' || formData.status === 'recebido')
                         ? isReceivable
                           ? 'border-success/40 bg-success/5 text-success hover:bg-success/10'
                           : 'border-slate-700/40 bg-slate-700/5 text-slate-800 hover:bg-slate-700/10'
@@ -266,6 +306,18 @@ export default function NewTransactionPage() {
                   >
                     <span className="font-semibold">⏳ Pendente</span>
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setFormData({ ...formData, status: 'atrasado' })}
+                    className={`h-auto py-3 sm:py-4 border-2 transition-all ${
+                      formData.status === 'atrasado'
+                        ? 'border-destructive/40 bg-destructive/5 text-destructive hover:bg-destructive/10'
+                        : 'border-slate-200 text-slate-500 hover:text-slate-700 bg-white'
+                    }`}
+                  >
+                    <span className="font-semibold">⚠️ Atrasado</span>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -279,7 +331,7 @@ export default function NewTransactionPage() {
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <p className="text-sm text-slate-500 mb-0.5">
-                      {isReceivable ? 'Total a registrar (entrada)' : 'Total a registrar (saída)'}
+                      {isReceivable ? 'Total (entrada)' : 'Total (saída)'}
                     </p>
                     <p className={`text-2xl sm:text-3xl font-bold ${
                       isReceivable ? 'text-success' : 'text-destructive'
@@ -287,18 +339,23 @@ export default function NewTransactionPage() {
                       {isReceivable ? '+' : '−'} {formatCurrency(formData.amount)}
                     </p>
                   </div>
-                  {formData.status === 'pago' && (
+                  {(formData.status === 'pago' || formData.status === 'recebido') && (
                     <div className={`px-4 py-2 rounded-xl font-semibold text-sm ${
                       isReceivable
                         ? 'bg-success/15 text-success'
                         : 'bg-slate-700/10 text-slate-800'
                     }`}>
-                      Caixa {isReceivable ? 'aumenta' : 'diminui'} hoje
+                      Caixa {isReceivable ? 'aumenta' : 'diminui'}
                     </div>
                   )}
                   {formData.status === 'pendente' && (
                     <div className="px-4 py-2 rounded-xl font-semibold text-sm bg-warning/15 text-warning">
                       Aguardar liquidação
+                    </div>
+                  )}
+                  {formData.status === 'atrasado' && (
+                    <div className="px-4 py-2 rounded-xl font-semibold text-sm bg-destructive/15 text-destructive">
+                      Pagamento em atraso
                     </div>
                   )}
                 </div>
@@ -312,10 +369,10 @@ export default function NewTransactionPage() {
             <Button
               type="submit"
               className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold shadow-sm flex items-center justify-center gap-2"
-              disabled={loading}
+              disabled={saving}
             >
               <Save className="size-5" />
-              {loading ? 'Registrando...' : 'Salvar Transação'}
+              {saving ? 'Salvando...' : 'Salvar Alterações'}
             </Button>
           </CardFooter>
         </Card>

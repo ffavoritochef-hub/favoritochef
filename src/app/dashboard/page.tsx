@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   PlusCircle,
   Calendar as CalendarIcon,
@@ -13,390 +13,250 @@ import {
   DollarSign,
   FileText,
   Utensils,
-  Search,
-  ArrowUpRight,
-  ArrowDownRight,
   TrendingUp,
   TrendingDown,
-  ShoppingCart,
+  AlertTriangle,
+  HardHat,
   Wallet,
+  ChevronRight,
 } from 'lucide-react';
-import Link from 'next/link';
+import { formatBRL, calcDeposit, staffGap } from '@/lib/buffet-rules';
 
 export const dynamic = 'force-dynamic';
+
+type Alert = { key: string; tone: 'danger' | 'warning'; icon: 'wallet' | 'staff'; text: string; href: string };
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    eventCount: 0,
-    clientsCount: 0,
-    pendingBudgets: 0,
-    totalReceivable: 0,
-    totalPayable: 0,
-    monthlyAgreedValue: 0,
-    monthlyEventCosts: 0,
+  const [data, setData] = useState({
+    eventsMonth: 0,
+    revenueMonth: 0,
+    costsMonth: 0,
+    clients: 0,
+    awaiting: 0,
+    upcoming: [] as any[],
+    pendingBudgets: [] as any[],
+    alerts: [] as Alert[],
   });
-  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchData();
+    (async () => {
+      try {
+        const now = new Date();
+        const iso = (d: Date) => d.toISOString().slice(0, 10);
+        const monthStart = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+        const monthEnd = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+        const today = iso(now);
+        const in30 = iso(new Date(now.getTime() + 30 * 86400000));
+
+        const [evRes, clientsRes, budRes, payRes, empRes, costRes] = await Promise.all([
+          supabase.from('events').select('id, name, date, start_time, status, guest_count, agreed_value, client:clients(name)').neq('status', 'Cancelado').gte('date', monthStart).order('date'),
+          supabase.from('clients').select('id', { count: 'exact', head: true }).neq('is_active', false),
+          supabase.from('budgets').select('id, event_id, total_value, proposal_status, deposit_percent, created_at, events(name, client:clients(name))').in('proposal_status', ['rascunho', 'enviada']).order('created_at', { ascending: false }).limit(5),
+          supabase.from('event_payments').select('event_id, amount, status'),
+          supabase.from('event_employees').select('event_id'),
+          supabase.from('finance_transactions').select('amount, event_id, date').eq('type', 'payable').not('event_id', 'is', null).gte('date', monthStart).lte('date', monthEnd),
+        ]);
+
+        const events = (evRes.data as any[]) || [];
+        const inMonth = events.filter((e) => e.date <= monthEnd);
+        const confirmed = inMonth.filter((e) => ['Aprovado', 'Em andamento', 'Finalizado'].includes(e.status));
+
+        const received: Record<string, number> = {};
+        (payRes.data || []).forEach((p: any) => {
+          if (p.status === 'Recebido') received[p.event_id] = (received[p.event_id] || 0) + Number(p.amount || 0);
+        });
+        const staffCount: Record<string, number> = {};
+        (empRes.data || []).forEach((r: any) => (staffCount[r.event_id] = (staffCount[r.event_id] || 0) + 1));
+        const depositByEvent: Record<string, number> = {};
+        ((budRes.data as any[]) || []).forEach((b) => (depositByEvent[b.event_id] ??= Number(b.deposit_percent) || 30));
+
+        const alerts: Alert[] = [];
+        events
+          .filter((e) => e.date >= today && e.date <= in30 && ['Aprovado', 'Em andamento'].includes(e.status))
+          .forEach((e) => {
+            const need = calcDeposit(Number(e.agreed_value) || 0, depositByEvent[e.id] ?? 30).deposit;
+            if (need > 0 && (received[e.id] || 0) + 0.005 < need) {
+              alerts.push({
+                key: 'p' + e.id, tone: 'danger', icon: 'wallet', href: `/dashboard/events/${e.id}`,
+                text: `${e.name}: sinal pendente (${formatBRL(received[e.id] || 0)} de ${formatBRL(need)})`,
+              });
+            }
+            const g = staffGap(Number(e.guest_count) || 0, staffCount[e.id] || 0);
+            if (!g.ok) {
+              alerts.push({
+                key: 's' + e.id, tone: 'warning', icon: 'staff', href: `/dashboard/events/${e.id}/edit`,
+                text: `${e.name}: equipe incompleta (faltam ${g.missing} de ${g.total} sugeridos)`,
+              });
+            }
+          });
+
+        setData({
+          eventsMonth: inMonth.length,
+          revenueMonth: confirmed.reduce((a, e) => a + (Number(e.agreed_value) || 0), 0),
+          costsMonth: (costRes.data || []).reduce((a: number, t: any) => a + Number(t.amount || 0), 0),
+          clients: clientsRes.count || 0,
+          awaiting: events.filter((e) => ['Orçamento enviado', 'Aguardando aprovação'].includes(e.status)).length,
+          upcoming: events.filter((e) => e.date >= today).slice(0, 5),
+          pendingBudgets: (budRes.data as any[]) || [],
+          alerts: alerts.slice(0, 6),
+        });
+      } catch (e) {
+        console.error('Erro ao carregar dashboard', e);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  async function fetchData() {
-    try {
-      setLoading(true);
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
-      const [{ count: eventCount }, { count: clientsCount }, { count: pendingBudgets }] = await Promise.all([
-        supabase.from('events').select('*', { count: 'exact', head: true }).gte('date', monthStart).lte('date', monthEnd),
-        supabase.from('clients').select('*', { count: 'exact', head: true }).eq('is_active', true),
-        supabase.from('budgets').select('*', { count: 'exact', head: true }),
-      ]);
-
-      const { data: monthEvents } = await supabase
-        .from('events')
-        .select('agreed_value')
-        .gte('date', monthStart)
-        .lte('date', monthEnd);
-
-      const monthlyAgreedValue = (monthEvents || []).reduce((sum, e) => sum + Number(e.agreed_value || 0), 0);
-
-      const { data: txns } = await supabase
-        .from('finance_transactions')
-        .select('amount, type, event_id, date')
-        .gte('date', monthStart)
-        .lte('date', monthEnd);
-
-      let totalReceivable = 0;
-      let totalPayable = 0;
-      let monthlyEventCosts = 0;
-      (txns || []).forEach((t) => {
-        const amt = Number(t.amount || 0);
-        if (t.type === 'receivable') totalReceivable += amt;
-        else {
-          totalPayable += amt;
-          if (t.event_id) monthlyEventCosts += amt;
-        }
-      });
-
-      setStats({
-        eventCount: eventCount || 0,
-        clientsCount: clientsCount || 0,
-        pendingBudgets: pendingBudgets || 0,
-        totalReceivable,
-        totalPayable,
-        monthlyAgreedValue,
-        monthlyEventCosts,
-      });
-
-      const { data: nextEvents } = await supabase
-        .from('events')
-        .select('*, client:clients(name)')
-        .gte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: true })
-        .limit(3);
-      setUpcomingEvents(nextEvents || []);
-    } catch (err) {
-      console.error('Dashboard fetch error', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const monthlyResult = stats.monthlyAgreedValue - stats.monthlyEventCosts;
-  const cashBalance = stats.totalReceivable - stats.totalPayable;
+  const result = data.revenueMonth - data.costsMonth;
+  const kpis = [
+    { label: 'Eventos no mês', value: String(data.eventsMonth), icon: CalendarIcon, tone: 'primary' },
+    { label: 'Faturamento fechado', value: formatBRL(data.revenueMonth), icon: DollarSign, tone: 'success' },
+    { label: 'Resultado do mês', value: formatBRL(result), icon: result >= 0 ? TrendingUp : TrendingDown, tone: result >= 0 ? 'success' : 'destructive', sub: `Custos vinculados: ${formatBRL(data.costsMonth)}` },
+    { label: 'Aguardando resposta', value: String(data.awaiting), icon: FileText, tone: 'warning' },
+  ] as const;
+  const toneBg: Record<string, string> = { primary: 'bg-primary/10 text-primary', success: 'bg-success/10 text-success', warning: 'bg-warning/10 text-warning', destructive: 'bg-destructive/10 text-destructive' };
 
   return (
     <div className="w-full space-y-5 sm:space-y-6 lg:space-y-8">
       <header className="hidden md:block">
-        <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">
-          Olá, {user?.email?.split('@')[0]}! 👋
-        </h1>
-        <p className="text-slate-500 mt-1.5 text-sm">
-          Bem-vindo ao seu sistema. Acompanhe tudo o que está acontecendo no seu Buffet.
-        </p>
+        <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Olá, {user?.email?.split('@')[0]}! 👋</h1>
+        <p className="text-slate-500 mt-1.5 text-sm">Resumo do seu buffet neste mês.</p>
       </header>
 
-      <div className="relative w-full">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 shrink-0" />
-        <Input
-          placeholder="Buscar no sistema..."
-          className="pl-12 h-12 bg-white border-border rounded-2xl placeholder:text-slate-400 text-slate-900 shadow-sm"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
-        <Card className="bg-white border-border shadow-card rounded-2xl hover:shadow-card-hover transition-all">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 sm:pt-5">
-            <CardTitle className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Eventos Mês</CardTitle>
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <CalendarIcon className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-primary shrink-0" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5 space-y-1">
-            <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900">
-              {loading ? '-' : stats.eventCount}
-            </p>
-            <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold">
-              <span>Total de eventos agendados</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-border shadow-card rounded-2xl hover:shadow-card-hover transition-all">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 sm:pt-5">
-            <CardTitle className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Faturamento Eventos</CardTitle>
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-success/10 flex items-center justify-center">
-              <DollarSign className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-success shrink-0" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5 space-y-1">
-            <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 break-all">
-              {loading ? '-' : `R$ ${stats.monthlyAgreedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            </p>
-            <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold">
-              <span>Valor acordado no mês</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-border shadow-card rounded-2xl hover:shadow-card-hover transition-all">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 sm:pt-5">
-            <CardTitle className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Clientes</CardTitle>
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-info/10 flex items-center justify-center">
-              <Users className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-info shrink-0" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5 space-y-1">
-            <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900">
-              {loading ? '-' : stats.clientsCount}
-            </p>
-            <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold">
-              <span>Clientes ativos cadastrados</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-border shadow-card rounded-2xl hover:shadow-card-hover transition-all">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 sm:pt-5">
-            <CardTitle className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Orçamentos</CardTitle>
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-warning/10 flex items-center justify-center">
-              <FileText className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-warning shrink-0" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5 space-y-1">
-            <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900">
-              {loading ? '-' : stats.pendingBudgets}
-            </p>
-            <div className="flex items-center gap-1 text-slate-500 text-xs font-semibold">
-              <span>Orçamentos gerados no total</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 w-full">
-        <Card className="bg-white border-border shadow-card rounded-2xl">
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 sm:pb-2 pt-4 sm:pt-5">
-            <CardTitle className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Custos Vinculados</CardTitle>
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-destructive/10 flex items-center justify-center border border-destructive/20">
-              <ShoppingCart className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-destructive shrink-0" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5">
-            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-destructive break-all">
-              {loading ? '-' : `- R$ ${stats.monthlyEventCosts.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            </p>
-            <p className="text-xs text-slate-500 font-semibold mt-1.5 uppercase tracking-wide">Gastos dos eventos do mês</p>
-          </CardContent>
-        </Card>
-
-        <Card className={`bg-white border-border shadow-card rounded-2xl border-2 ${monthlyResult >= 0 ? 'border-success/20' : 'border-destructive/20'}`}>
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 sm:pb-2 pt-4 sm:pt-5">
-            <CardTitle className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Resultado do Mês</CardTitle>
-            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border ${monthlyResult >= 0 ? 'bg-success/10 border-success/20' : 'bg-destructive/10 border-destructive/20'}`}>
-              {monthlyResult >= 0 ? (
-                <TrendingUp className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-success shrink-0" />
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 w-full">
+        {kpis.map((k) => (
+          <Card key={k.label} className="bg-white border-border shadow-card rounded-2xl">
+            <CardContent className="p-4 sm:p-5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-slate-500 text-[11px] sm:text-xs font-semibold uppercase tracking-wider">{k.label}</p>
+                <span className={`size-9 rounded-xl flex items-center justify-center shrink-0 ${toneBg[k.tone]}`}>
+                  <k.icon className="size-5" />
+                </span>
+              </div>
+              {loading ? (
+                <div className="h-8 w-24 rounded bg-slate-100 animate-pulse" />
               ) : (
-                <TrendingDown className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-destructive shrink-0" />
+                <p className={`text-xl sm:text-2xl lg:text-3xl font-bold break-words ${k.tone === 'destructive' ? 'text-destructive' : 'text-slate-900'}`}>{k.value}</p>
               )}
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5 space-y-1">
-            <p className={`text-xl sm:text-2xl lg:text-3xl font-bold break-all ${monthlyResult >= 0 ? 'text-success' : 'text-destructive'}`}>
-              {loading ? '-' : `${monthlyResult >= 0 ? '+' : ''} R$ ${monthlyResult.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            </p>
-            <p className="text-xs text-slate-500 font-semibold mt-1.5 uppercase tracking-wide">Acordado − Custos dos eventos</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-border shadow-card rounded-2xl">
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 sm:pb-2 pt-4 sm:pt-5">
-            <CardTitle className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Saldo em Caixa</CardTitle>
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-              <Wallet className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-primary shrink-0" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5 space-y-1">
-            <p className={`text-xl sm:text-2xl lg:text-3xl font-bold break-all ${
-              loading ? 'text-slate-900' : cashBalance >= 0 ? 'text-slate-900' : 'text-destructive'
-            }`}>
-              {loading ? '-' : `R$ ${cashBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            </p>
-            <div className="flex gap-3 text-xs text-slate-500 font-semibold mt-1.5">
-              <span className="flex items-center gap-1 text-success">
-                <ArrowUpRight className="w-3.5 h-3.5" />
-                {loading ? '-' : `R$ ${stats.totalReceivable.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
-              </span>
-              <span className="flex items-center gap-1 text-destructive">
-                <ArrowDownRight className="w-3.5 h-3.5" />
-                {loading ? '-' : `R$ ${stats.totalPayable.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+              {'sub' in k && <p className="text-xs text-slate-500">{k.sub}</p>}
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      {data.alerts.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <span className="w-1.5 h-6 bg-destructive rounded-full" /> Atenção nos próximos 30 dias
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+            {data.alerts.map((a) => (
+              <Link
+                key={a.key}
+                href={a.href}
+                className={`flex items-center gap-3 rounded-xl border px-4 py-3 min-h-[52px] text-sm transition hover:shadow-sm ${a.tone === 'danger' ? 'border-destructive/30 bg-destructive/5' : 'border-warning/40 bg-warning/10'}`}
+              >
+                {a.icon === 'wallet' ? <Wallet className="size-5 text-destructive shrink-0" /> : <HardHat className="size-5 text-warning shrink-0" />}
+                <span className="flex-1 min-w-0 text-slate-800">{a.text}</span>
+                <ChevronRight className="size-4 text-slate-400 shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 w-full">
-        <section className="space-y-3 sm:space-y-4">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-3">
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-              <span className="w-1.5 h-6 bg-primary rounded-full shrink-0"></span>
-              Próximos Eventos
-            </h2>
-            <Button asChild variant="outline" size="sm" className="border-border text-primary hover:bg-primary/5 hover:border-primary/30 transition-all self-start sm:self-center h-11 px-5 rounded-xl font-semibold">
-              <Link href="/dashboard/events">Ver Todos</Link>
-            </Button>
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"><span className="w-1.5 h-6 bg-primary rounded-full" />Próximos Eventos</h2>
+            <Button asChild variant="outline" size="sm" className="h-10 px-4 rounded-xl font-semibold text-primary border-border"><Link href="/dashboard/events">Ver todos</Link></Button>
           </div>
-          <Card className="bg-white border-border shadow-card rounded-2xl overflow-hidden">
-            {loading ? (
-              <CardContent className="p-6 sm:p-8 flex items-center justify-center h-48 text-slate-500">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </CardContent>
-            ) : upcomingEvents.length === 0 ? (
-              <CardContent className="p-6 sm:p-8 text-center space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-                  <CalendarIcon className="w-8 h-8 text-primary/60 shrink-0" />
+          <Card className="bg-white border-border shadow-card rounded-2xl">
+            <CardContent className="p-0">
+              {data.upcoming.length === 0 ? (
+                <div className="p-8 text-center space-y-4">
+                  <CalendarIcon className="size-10 mx-auto text-primary/50" />
+                  <p className="font-semibold text-slate-900">Nenhum evento agendado</p>
+                  <Button asChild className="bg-primary hover:bg-primary-dark text-white h-12 px-6 rounded-xl font-semibold w-full sm:w-auto">
+                    <Link href="/dashboard/events/new"><PlusCircle className="size-5" /> Agendar Evento</Link>
+                  </Button>
                 </div>
-                <div className="space-y-1.5">
-                  <p className="text-slate-900 font-semibold text-base">Nenhum evento agendado</p>
-                  <p className="text-slate-500 text-sm">Comece agendando seu primeiro evento agora.</p>
-                </div>
-                <Button asChild className="bg-primary hover:bg-primary-dark text-white font-semibold transition-all w-full sm:w-auto h-12 px-6 rounded-xl text-sm shadow-sm shadow-primary/15">
-                  <Link href="/dashboard/events/new" className="flex items-center justify-center gap-2">
-                    <PlusCircle className="w-5 h-5" />
-                    Agendar Evento
-                  </Link>
-                </Button>
-              </CardContent>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {upcomingEvents.map((event) => {
-                  const d = new Date(event.date);
-                  return (
-                    <Link
-                      key={event.id}
-                      href={`/dashboard/events/${event.id}`}
-                      className="flex items-center gap-3 sm:gap-4 px-5 sm:px-6 py-4 sm:py-5 hover:bg-slate-50/60 transition-colors"
-                    >
-                      <div className="flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-primary/10 border-primary/20 shrink-0">
-                        <span className="text-xl sm:text-2xl font-bold leading-none text-slate-900">{d.getDate()}</span>
-                        <span className="text-[10px] sm:text-[11px] uppercase font-bold tracking-widest text-primary mt-0.5">
-                          {d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="text-sm sm:text-base font-bold text-slate-900 truncate">{event.name}</p>
-                        <p className="text-xs sm:text-sm text-slate-500 truncate">
-                          {event.client?.name || 'Cliente não informado'}
-                        </p>
-                      </div>
-                      {Number(event.agreed_value || 0) > 0 && (
-                        <div className="text-right shrink-0">
-                          <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Valor</p>
-                          <p className="text-sm sm:text-base font-bold text-primary">
-                            R$ {Number(event.agreed_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {data.upcoming.map((e) => (
+                    <li key={e.id}>
+                      <Link href={`/dashboard/events/${e.id}`} className="flex items-center gap-3 p-4 hover:bg-slate-50 min-h-[64px]">
+                        <div className="size-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center shrink-0">
+                          <span className="text-lg font-bold leading-none text-slate-900">{new Date(e.date + 'T12:00:00').getDate()}</span>
+                          <span className="text-[10px] uppercase font-bold text-primary">{new Date(e.date + 'T12:00:00').toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}</span>
                         </div>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-slate-900 truncate">{e.name}</p>
+                          <p className="text-xs text-slate-500 truncate">{e.client?.name} · {e.guest_count} convidados · {String(e.start_time).slice(0, 5)}</p>
+                        </div>
+                        <span className="text-[11px] font-semibold text-slate-500 hidden sm:block">{e.status}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
           </Card>
         </section>
 
-        <section className="space-y-3 sm:space-y-4">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-3">
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-              <span className="w-1.5 h-6 bg-warning rounded-full shrink-0"></span>
-              Orçamentos Pendentes
-            </h2>
-            <Button asChild variant="outline" size="sm" className="border-border text-primary hover:bg-primary/5 hover:border-primary/30 transition-all self-start sm:self-center h-11 px-5 rounded-xl font-semibold">
-              <Link href="/dashboard/budgets">Ver Todos</Link>
-            </Button>
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"><span className="w-1.5 h-6 bg-warning rounded-full" />Propostas em aberto</h2>
+            <Button asChild variant="outline" size="sm" className="h-10 px-4 rounded-xl font-semibold text-primary border-border"><Link href="/dashboard/budgets">Ver todas</Link></Button>
           </div>
           <Card className="bg-white border-border shadow-card rounded-2xl">
-            <CardContent className="p-6 sm:p-8 text-center space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-warning/10 flex items-center justify-center mx-auto">
-                <FileText className="w-8 h-8 text-warning/70 shrink-0" />
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-slate-900 font-semibold text-base">Sem orçamentos pendentes</p>
-                <p className="text-slate-500 text-sm">Todos os orçamentos foram respondidos.</p>
-              </div>
-              <Button asChild variant="outline" className="w-full sm:w-auto h-11 px-6 rounded-xl font-semibold text-primary border-primary/30 hover:bg-primary/5">
-                <Link href="/dashboard/budgets/new">
-                  Gerar Novo Orçamento
-                </Link>
-              </Button>
+            <CardContent className="p-0">
+              {data.pendingBudgets.length === 0 ? (
+                <div className="p-8 text-center space-y-4">
+                  <FileText className="size-10 mx-auto text-warning/60" />
+                  <p className="font-semibold text-slate-900">Sem propostas em aberto</p>
+                  <Button asChild variant="outline" className="h-12 px-6 rounded-xl font-semibold text-primary border-primary/30 w-full sm:w-auto"><Link href="/dashboard/budgets/new">Gerar novo orçamento</Link></Button>
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {data.pendingBudgets.map((b) => (
+                    <li key={b.id}>
+                      <Link href="/dashboard/budgets" className="flex items-center gap-3 p-4 hover:bg-slate-50 min-h-[64px]">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-slate-900 truncate">{b.events?.name}</p>
+                          <p className="text-xs text-slate-500 truncate">{b.events?.client?.name}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-slate-900 text-sm">{formatBRL(Number(b.total_value))}</p>
+                          <p className={`text-[11px] font-semibold ${b.proposal_status === 'enviada' ? 'text-sky-600' : 'text-slate-500'}`}>{b.proposal_status === 'enviada' ? 'Enviada ao cliente' : 'Rascunho'}</p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
         </section>
       </div>
 
-      <section className="space-y-3 sm:space-y-4 w-full">
-        <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-          <span className="w-1.5 h-6 bg-highlight rounded-full shrink-0"></span>
-          Acesso Rápido
-        </h2>
+      <section className="space-y-3 w-full">
+        <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"><span className="w-1.5 h-6 bg-highlight rounded-full" />Acesso Rápido</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 w-full">
-          <Button asChild variant="outline" className="flex flex-col gap-2 h-auto py-5 sm:py-6 px-3 rounded-2xl border-border bg-white hover:bg-primary/5 hover:border-primary/30 hover:text-primary text-slate-700 transition-all shadow-sm">
-            <Link href="/dashboard/agenda" className="w-full h-full">
-              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mx-auto">
-                <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
-              </div>
-              <span className="text-sm font-semibold">Agenda</span>
+          {[
+            { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarIcon, bg: 'bg-primary/10 text-primary' },
+            { href: '/dashboard/budgets/new', label: '+ Orçamento', icon: FileText, bg: 'bg-success/10 text-success' },
+            { href: '/dashboard/clients/new', label: '+ Cliente', icon: Users, bg: 'bg-info/10 text-info' },
+            { href: '/dashboard/menu', label: 'Cardápio', icon: Utensils, bg: 'bg-highlight/10 text-highlight' },
+          ].map((q) => (
+            <Link key={q.href} href={q.href} className="flex flex-col items-center gap-2 py-5 px-3 rounded-2xl border border-border bg-white hover:bg-primary/5 hover:border-primary/30 transition shadow-sm min-h-[96px]">
+              <span className={`size-11 rounded-xl flex items-center justify-center ${q.bg}`}><q.icon className="size-6" /></span>
+              <span className="text-sm font-semibold text-slate-700">{q.label}</span>
             </Link>
-          </Button>
-          <Button asChild variant="outline" className="flex flex-col gap-2 h-auto py-5 sm:py-6 px-3 rounded-2xl border-border bg-white hover:bg-primary/5 hover:border-primary/30 hover:text-primary text-slate-700 transition-all shadow-sm">
-            <Link href="/dashboard/budgets/new" className="w-full h-full">
-              <div className="w-11 h-11 rounded-xl bg-success/10 flex items-center justify-center mx-auto">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-success shrink-0" />
-              </div>
-              <span className="text-sm font-semibold">+ Orçamento</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="flex flex-col gap-2 h-auto py-5 sm:py-6 px-3 rounded-2xl border-border bg-white hover:bg-primary/5 hover:border-primary/30 hover:text-primary text-slate-700 transition-all shadow-sm">
-            <Link href="/dashboard/clients/new" className="w-full h-full">
-              <div className="w-11 h-11 rounded-xl bg-info/10 flex items-center justify-center mx-auto">
-                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-info shrink-0" />
-              </div>
-              <span className="text-sm font-semibold">+ Cliente</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="flex flex-col gap-2 h-auto py-5 sm:py-6 px-3 rounded-2xl border-border bg-white hover:bg-primary/5 hover:border-primary/30 hover:text-primary text-slate-700 transition-all shadow-sm">
-            <Link href="/dashboard/menu" className="w-full h-full">
-              <div className="w-11 h-11 rounded-xl bg-highlight/10 flex items-center justify-center mx-auto">
-                <Utensils className="w-5 h-5 sm:w-6 sm:h-6 text-highlight shrink-0" />
-              </div>
-              <span className="text-sm font-semibold">Cardápio</span>
-            </Link>
-          </Button>
+          ))}
         </div>
       </section>
     </div>

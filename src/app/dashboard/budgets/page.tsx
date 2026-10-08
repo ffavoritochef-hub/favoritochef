@@ -19,6 +19,7 @@ import {
   Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { authFetch, openProtectedPdf } from '@/lib/api-client';
 import Link from 'next/link';
 
 const statusStyles: Record<string, string> = {
@@ -55,26 +56,50 @@ export default function BudgetsPage() {
     }
   }
 
-  const handleWhatsApp = async (eventId: string, _clientName: string, _eventName: string) => {
+  const handleWhatsApp = async (eventId: string, _clientName?: string, _eventName?: string) => {
+    // abre a aba já no clique (evita bloqueio de pop-up no celular)
+    const w = window.open('', '_blank');
     try {
-      const response = await fetch(`/api/proposals/${eventId}/whatsapp`);
-      const data = await response.json();
-      if (data.link) {
-        window.open(data.link, '_blank');
+      const res = await authFetch(`/api/proposals/${eventId}/send`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar proposta.');
+      if (data.whatsappLink) {
+        if (w) w.location.href = data.whatsappLink;
+        else window.location.href = data.whatsappLink;
+        toast.success('Proposta enviada! Finalize o envio no WhatsApp.');
       } else {
-        toast.error('WhatsApp do cliente não cadastrado.');
+        w?.close();
+        try { await navigator.clipboard.writeText(data.publicUrl); } catch {}
+        toast.warning('Cliente sem WhatsApp/telefone. Link da proposta copiado.');
       }
-    } catch (_error) {
-      toast.error('Erro ao gerar link do WhatsApp.');
+      fetchBudgets();
+    } catch (error: any) {
+      w?.close();
+      toast.error(error.message || 'Erro ao enviar proposta.');
     }
   };
 
   const handleDownloadPdf = (eventId: string) => {
-    window.open(`/api/proposals/${eventId}/pdf?download=true`, '_blank');
+    openProtectedPdf(`/api/proposals/${eventId}/pdf?download=true`, true, 'proposta.pdf').catch((e) => toast.error(e.message));
   };
 
   const handleViewPdf = (eventId: string) => {
-    window.open(`/api/proposals/${eventId}/pdf?download=false`, '_blank');
+    openProtectedPdf(`/api/proposals/${eventId}/pdf`).catch((e) => toast.error(e.message));
+  };
+
+  const proposalLabel: Record<string, { text: string; cls: string }> = {
+    rascunho: { text: 'Rascunho', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+    enviada: { text: 'Enviada', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+    aceita: { text: 'Aceita', cls: 'bg-success/10 text-success border-success/30' },
+    recusada: { text: 'Recusada', cls: 'bg-destructive/10 text-destructive border-destructive/30' },
+  };
+  const ProposalBadge = ({ status, validUntil }: { status?: string; validUntil?: string | null }) => {
+    const key = status || 'rascunho';
+    const text = proposalLabel[key]?.text ?? 'Rascunho';
+    if (key === 'enviada' && validUntil && new Date(validUntil + 'T23:59:59') < new Date()) {
+      return <span className="inline-block text-[11px] px-2.5 py-0.5 rounded-full border font-semibold bg-warning/10 text-warning border-warning/40">Expirada</span>;
+    }
+    return <span className={`inline-block text-[11px] px-2.5 py-0.5 rounded-full border font-semibold ${proposalLabel[key]?.cls ?? proposalLabel.rascunho.cls}`}>Proposta: {text}</span>;
   };
 
   return (
@@ -133,7 +158,8 @@ export default function BudgetsPage() {
                 
                 <div className="flex items-end justify-between border-t border-slate-100 pt-3 mt-3">
                   <div>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Valor Total</p>
+                    <ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} />
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mt-2">Valor Total</p>
                     <p className="text-xl sm:text-2xl font-bold text-primary break-all">
                       R$ {Number(budget.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
@@ -153,7 +179,7 @@ export default function BudgetsPage() {
                       size="sm"
                       className="border-success/20 text-success hover:bg-success hover:text-white h-11 w-11 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center"
                       onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
-                      title="Enviar WhatsApp"
+                      title="Enviar proposta por WhatsApp"
                     >
                       <MessageSquare className="w-4.5 h-4.5" />
                     </Button>
@@ -229,6 +255,7 @@ export default function BudgetsPage() {
                       }`}>
                         {budget.events?.status}
                       </span>
+                      <div className="mt-1.5"><ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} /></div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -246,7 +273,7 @@ export default function BudgetsPage() {
                         size="icon" 
                         className="text-slate-400 hover:text-success hover:bg-success/5 h-10 w-10 rounded-lg"
                         onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
-                        title="Enviar WhatsApp"
+                        title="Enviar proposta por WhatsApp"
                       >
                         <MessageSquare className="w-4.5 h-4.5" />
                       </Button>

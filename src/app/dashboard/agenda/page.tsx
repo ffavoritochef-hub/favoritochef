@@ -62,7 +62,7 @@ export default function AgendaPage() {
     const groups: Record<string, any[]> = {};
 
     eventsList.forEach((event) => {
-      const date = new Date(event.date);
+      const date = new Date(event.date + 'T12:00:00');
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       if (!groups[key]) {
         groups[key] = [];
@@ -80,7 +80,7 @@ export default function AgendaPage() {
           key,
           monthLabel: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
           events: items.sort((a, b) => {
-            const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
+            const dateCompare = new Date(a.date + 'T12:00:00').getTime() - new Date(b.date + 'T12:00:00').getTime();
             if (dateCompare !== 0) return dateCompare;
             return a.start_time.localeCompare(b.start_time);
           }),
@@ -136,9 +136,9 @@ export default function AgendaPage() {
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-5 w-full">
                       <div className="flex flex-col sm:flex-row gap-3 sm:gap-5 w-full">
                         <div className="flex flex-row sm:flex-col items-center justify-center gap-1 sm:gap-0 w-full sm:w-auto px-4 py-3.5 sm:px-0 sm:py-0 sm:w-24 sm:h-24 rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0">
-                          <span className="text-3xl sm:text-3xl font-bold leading-none text-slate-900">{new Date(event.date).getDate()}</span>
+                          <span className="text-3xl sm:text-3xl font-bold leading-none text-slate-900">{new Date(event.date + 'T12:00:00').getDate()}</span>
                           <span className="text-[11px] sm:text-xs uppercase font-bold tracking-widest text-primary">
-                            {new Date(event.date).toLocaleString('pt-BR', { weekday: 'short' }).replace('.', '')}
+                            {new Date(event.date + 'T12:00:00').toLocaleString('pt-BR', { weekday: 'short' }).replace('.', '')}
                           </span>
                         </div>
                         <div className="space-y-2 sm:space-y-1.5 flex-1 min-w-0 w-full">
@@ -195,7 +195,7 @@ export default function AgendaPage() {
                                 <h4 className="text-xs sm:text-sm font-semibold text-slate-500 uppercase tracking-wider border-b border-border pb-2">Informações do Evento</h4>
                                 <div className="space-y-2.5 sm:space-y-3">
                                   <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Tipo:</span> <span className="text-slate-900 font-bold text-right">{event.type}</span></p>
-                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Data:</span> <span className="text-slate-900 font-bold text-right">{new Date(event.date).toLocaleDateString('pt-BR')}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Data:</span> <span className="text-slate-900 font-bold text-right">{new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span></p>
                                   <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Horário:</span> <span className="text-slate-900 font-bold text-right">{event.start_time.slice(0, 5)} às {event.end_time.slice(0, 5)}</span></p>
                                   <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Convidados:</span> <span className="text-slate-900 font-bold text-right">{event.guest_count}</span></p>
                                   <p className="text-sm sm:text-base flex justify-between gap-2 items-center"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Status:</span> <span className={`font-bold text-right px-2.5 py-0.5 rounded-full text-xs ${

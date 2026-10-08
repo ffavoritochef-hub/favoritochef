@@ -1,28 +1,33 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { 
-  PlusCircle, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  PlusCircle,
+  TrendingUp,
+  TrendingDown,
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
-  Filter
+  Filter,
+  Calendar,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const statusStyles: Record<string, string> = {
   'pago': 'bg-success text-white border-success rounded-full',
@@ -32,9 +37,17 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function FinancePage() {
+  const router = useRouter();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [cashFlow, setCashFlow] = useState({ total_receivable: 0, total_payable: 0, balance: 0 });
   const [loading, setLoading] = useState(true);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmData, setConfirmData] = useState<{
+    id: string;
+    description?: string;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -45,7 +58,7 @@ export default function FinancePage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('finance_transactions')
-        .select('*')
+        .select('*, event:events(name, client:clients(name))')
         .order('date', { ascending: false });
 
       if (error) throw error;
@@ -54,8 +67,10 @@ export default function FinancePage() {
       setTransactions(items);
 
       const summary = items.reduce((acc, curr) => {
-        if (curr.type === 'receivable') acc.total_receivable += Number(curr.amount);
-        else acc.total_payable += Number(curr.amount);
+        if (curr.status !== 'pendente' && curr.status !== 'atrasado') {
+          if (curr.type === 'receivable') acc.total_receivable += Number(curr.amount);
+          else acc.total_payable += Number(curr.amount);
+        }
         return acc;
       }, { total_receivable: 0, total_payable: 0 });
 
@@ -68,6 +83,42 @@ export default function FinancePage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function openDelete(t: any) {
+    const amt = Number(t.amount || 0).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+    setConfirmData({
+      id: t.id,
+      description: `${t.type === 'receivable' ? 'Receita' : 'Despesa'} de ${amt} — ${t.description || 'Sem descrição'}`,
+    });
+    setConfirmOpen(true);
+  }
+
+  async function handleConfirm() {
+    if (!confirmData) return;
+    setConfirmLoading(true);
+    try {
+      const { error } = await supabase
+        .from('finance_transactions')
+        .delete()
+        .eq('id', confirmData.id);
+      if (error) throw error;
+      toast.success('Transação excluída permanentemente.');
+      setConfirmOpen(false);
+      setConfirmData(null);
+      await fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Falha ao excluir transação.');
+    } finally {
+      setConfirmLoading(false);
+    }
+  }
+
+  function handleEdit(id: string) {
+    router.push(`/dashboard/finance/${id}/edit`);
   }
 
   return (
@@ -172,9 +223,20 @@ export default function FinancePage() {
                           Despesa
                         </span>
                       )}
-                      <span className="text-xs text-slate-500 font-medium">{new Date(t.date).toLocaleDateString('pt-BR')}</span>
+                      <span className="text-xs text-slate-500 font-medium">{new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                     </div>
                     <p className="text-sm sm:text-base font-semibold text-slate-900 break-words leading-relaxed">{t.description}</p>
+                    {t.event && (
+                      <p className="text-[11px] sm:text-xs mt-1.5 font-semibold text-primary flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{t.event.name}</span>
+                        {t.event.client && (
+                          <span className="text-slate-500 ml-0.5">
+                            ({t.event.client.name})
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <span className={`text-[11px] px-3 py-1 rounded-full border font-bold uppercase tracking-tight shrink-0 ${
                     statusStyles[t.status] || 'bg-slate-700 text-white border-slate-600 rounded-full'
@@ -182,10 +244,32 @@ export default function FinancePage() {
                     {t.status}
                   </span>
                 </div>
-                <div className={`border-t border-slate-100 pt-3 mt-4 text-right font-bold text-xl sm:text-2xl ${
+                <div className={`border-t border-slate-100 pt-3 mt-4 flex items-end justify-between gap-3 ${
                   t.type === 'receivable' ? 'text-success' : 'text-destructive'
                 }`}>
-                  {t.type === 'receivable' ? '+' : '-'} R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  <span className="font-bold text-xl sm:text-2xl">
+                    {t.type === 'receivable' ? '+' : '-'} R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(t.id)}
+                      className="rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5"
+                      title="Editar"
+                    >
+                      <Pencil className="size-5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openDelete(t)}
+                      className="rounded-xl text-slate-400 hover:text-destructive hover:bg-destructive/5"
+                      title="Excluir"
+                    >
+                      <Trash2 className="size-5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))
@@ -194,20 +278,22 @@ export default function FinancePage() {
 
         <div className="hidden md:block bg-white border-border shadow-card rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="min-w-[700px]">
+            <Table className="min-w-[880px]">
               <TableHeader className="bg-slate-50">
                 <TableRow className="hover:bg-transparent border-slate-100">
                   <TableHead className="text-slate-600 font-semibold text-sm">Data</TableHead>
                   <TableHead className="text-slate-600 font-semibold text-sm">Descrição</TableHead>
+                  <TableHead className="text-slate-600 font-semibold text-sm">Evento Vinculado</TableHead>
                   <TableHead className="text-slate-600 font-semibold text-sm">Tipo</TableHead>
                   <TableHead className="text-slate-600 font-semibold text-sm text-right">Valor</TableHead>
                   <TableHead className="text-slate-600 font-semibold text-sm text-center">Status</TableHead>
+                  <TableHead className="text-slate-600 font-semibold text-sm text-right w-[180px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-slate-500">
+                  <TableCell colSpan={7} className="h-32 text-center text-slate-500">
                     <div className="flex items-center justify-center gap-2 text-slate-500">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                       <span className="text-sm font-medium">Carregando transações...</span>
@@ -216,7 +302,7 @@ export default function FinancePage() {
                 </TableRow>
               ) : transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-slate-500 italic font-medium">
+                  <TableCell colSpan={7} className="h-32 text-center text-slate-500 italic font-medium">
                     Nenhuma transação registrada.
                   </TableCell>
                 </TableRow>
@@ -224,10 +310,23 @@ export default function FinancePage() {
                 transactions.map((t) => (
                   <TableRow key={t.id} className="hover:bg-slate-50/50 border-slate-100 transition-colors">
                     <TableCell className="text-slate-700 font-semibold text-sm">
-                      {new Date(t.date).toLocaleDateString('pt-BR')}
+                      {new Date(t.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </TableCell>
                     <TableCell className="font-semibold text-slate-900 text-sm">
                       {t.description}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {t.event ? (
+                        <Link
+                          href={`/dashboard/events/${t.event_id}`}
+                          className="text-primary font-semibold hover:underline inline-flex items-center gap-1.5 max-w-[220px]"
+                        >
+                          <Calendar className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{t.event.name}</span>
+                        </Link>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {t.type === 'receivable' ? (
@@ -254,6 +353,28 @@ export default function FinancePage() {
                         {t.status}
                       </span>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="inline-flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleEdit(t.id)}
+                          className="rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5"
+                          title="Editar"
+                        >
+                          <Pencil />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => openDelete(t)}
+                          className="rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5"
+                          title="Excluir"
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -262,6 +383,22 @@ export default function FinancePage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={(v) => {
+          if (confirmLoading) return;
+          setConfirmOpen(v);
+          if (!v) setConfirmData(null);
+        }}
+        title={`Excluir ${confirmData?.description || 'transação'}?`}
+        description="Esta ação não pode ser desfeita. A transação será removida permanentemente do financeiro e deixará de influenciar nos cálculos de rentabilidade do evento vinculado."
+        variant="destructive"
+        dangerLabel="Exclusão permanente: afeta diretamente os relatórios e o fluxo de caixa."
+        confirmText="Sim, excluir transação"
+        onConfirm={handleConfirm}
+        loading={confirmLoading}
+      />
     </div>
   );
 }

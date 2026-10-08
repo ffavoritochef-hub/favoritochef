@@ -1,40 +1,26 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { isUuid, publicBaseUrl, requireUser } from '@/lib/server-supabase';
+import { loadLatestBudgetByEvent } from '@/lib/proposal';
 
-export async function GET(request: Request, { params }: { params: Promise<{ eventId: string }> }) {
+export const dynamic = 'force-dynamic';
+
+/** Mantida por compatibilidade: agora exige login. Use POST /send para enviar a proposta. */
+export async function GET(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
+  const user = await requireUser(req);
+  if (!user) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
   const { eventId } = await params;
-
+  if (!isUuid(eventId)) return NextResponse.json({ link: null }, { status: 400 });
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-    
-    // Get event with client
-    const { data: event, error } = await supabase
-      .from('events')
-      .select('*, client:clients(*)')
-      .eq('id', eventId)
-      .single();
-
-    if (error) throw error;
-    if (!event || !event.client) return NextResponse.json({ link: null });
-
-    const phone = event.client.whatsapp || event.client.phone;
-    if (!phone) return NextResponse.json({ link: null });
-
-    let cleanPhone = String(phone).replace(/\D/g, '');
-    if (!cleanPhone) return NextResponse.json({ link: null });
-
-    if (cleanPhone.length <= 11 && !cleanPhone.startsWith('55')) {
-      cleanPhone = '55' + cleanPhone;
-    }
-
-    const message = encodeURIComponent(`Olá ${event.client.name}, sua proposta para o evento ${event.name} foi criada. Clique no link abaixo para visualizar e aprovar.`);
-    const link = `https://wa.me/${cleanPhone}?text=${message}`;
-
-    return NextResponse.json({ link });
-  } catch (error) {
-    console.error('Error getting WhatsApp link:', error);
-    return NextResponse.json({ link: null, error: 'Error getting WhatsApp link' }, { status: 500 });
+    const b = await loadLatestBudgetByEvent(eventId);
+    const client = b?.event?.client;
+    const phone = String(client?.whatsapp || client?.phone || '').replace(/\D/g, '');
+    if (!b || !phone) return NextResponse.json({ link: null });
+    const to = phone.length <= 11 && !phone.startsWith('55') ? '55' + phone : phone;
+    const url = `${publicBaseUrl(req)}/proposta/${b.proposal_token}`;
+    const text = `Olá ${client.name}, segue a proposta do evento ${b.event.name}: ${url}`;
+    return NextResponse.json({ link: `https://wa.me/${to}?text=${encodeURIComponent(text)}` });
+  } catch (e) {
+    console.error('whatsapp', e);
+    return NextResponse.json({ link: null, error: 'Erro ao gerar link.' }, { status: 500 });
   }
 }
