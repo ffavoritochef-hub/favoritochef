@@ -135,11 +135,11 @@ export default function LoginPage() {
                 </div>
               )}
             </CardContent>
-            <CardFooter className="px-5 sm:px-6 pb-6 sm:pb-7 pt-0">
+            <CardFooter className="px-5 sm:px-6 pb-6 sm:pb-7 pt-2 border-0 bg-transparent">
               <Button 
                 type="submit" 
                 size="lg"
-                className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl shadow-sm shadow-primary/20 transition-all" 
+                className="w-full h-12 bg-primary hover:bg-primary-dark text-white text-base font-semibold rounded-xl shadow-sm shadow-primary/20 transition-all" 
                 disabled={loading}
               >
                 {loading ? 'Autenticando...' : 'Entrar no Sistema'}
