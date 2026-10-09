@@ -255,7 +255,7 @@ export default function FinancePage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleEdit(t.id)}
-                      className="rounded-xl text-slate-400 hover:text-primary hover:bg-primary/5"
+                      className="size-11 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-primary/5 hover:text-primary hover:border-primary/30" aria-label="Editar"
                       title="Editar"
                     >
                       <Pencil className="size-5" />
@@ -264,7 +264,7 @@ export default function FinancePage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => openDelete(t)}
-                      className="rounded-xl text-slate-400 hover:text-destructive hover:bg-destructive/5"
+                      className="size-11 shrink-0 rounded-xl border border-destructive/25 bg-destructive/5 text-destructive hover:bg-destructive hover:text-white" aria-label="Excluir"
                       title="Excluir"
                     >
                       <Trash2 className="size-5" />

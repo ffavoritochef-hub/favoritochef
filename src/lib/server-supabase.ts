@@ -13,14 +13,23 @@ export function adminClient(): SupabaseClient {
   return admin;
 }
 
-/** Valida o Bearer token do usuário logado. Retorna null se inválido. */
-export async function requireUser(request: Request): Promise<User | null> {
+/**
+ * Valida o Bearer token do usuário logado usando a chave pública (anon) e devolve
+ * um cliente que age COMO o usuário (respeita RLS). Não depende da service role.
+ */
+export async function requireUser(request: Request): Promise<{ user: User; db: SupabaseClient } | null> {
   const header = request.headers.get('authorization') || '';
   const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
-  if (!token) return null;
-  const { data, error } = await adminClient().auth.getUser(token);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!token || !url || !anon) return null;
+  const db = createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data, error } = await db.auth.getUser(token);
   if (error || !data.user) return null;
-  return data.user;
+  return { user: data.user, db };
 }
 
 export const isUuid = (v: string) =>

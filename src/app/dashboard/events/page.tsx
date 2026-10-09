@@ -9,7 +9,10 @@ import {
   Clock, 
   MapPin, 
   Users,
-  BadgeCheck
+  BadgeCheck,
+  Eye,
+  Pencil,
+  FileText
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -82,7 +85,7 @@ export default function EventsPage() {
               key={event.id} 
               className="group bg-white border-border shadow-card rounded-2xl p-4 sm:p-6 hover:shadow-card-hover transition-all w-full"
             >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-5 w-full">
+              <div className="flex flex-col gap-4 w-full">
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-5 w-full">
                   <div className="flex flex-row sm:flex-col items-center sm:justify-center gap-1 sm:gap-0 w-full sm:w-auto px-4 py-3.5 sm:px-0 sm:py-0 sm:w-24 sm:h-24 rounded-xl bg-primary/10 border-primary/20 shrink-0">
                     <span className="text-3xl sm:text-3xl font-bold leading-none text-slate-900">{new Date(event.date + 'T12:00:00').getDate()}</span>
@@ -117,14 +120,24 @@ export default function EventsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-3 w-full sm:w-auto pt-3 sm:pt-0 mt-1 sm:mt-0 border-t sm:border-t-0 border-border sm:border-0">
-                  <Button asChild variant="outline" size="sm" className="flex-1 sm:flex-none border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl h-12 sm:h-10 font-semibold px-5">
+                <div className="grid grid-cols-3 sm:flex sm:justify-end gap-2 w-full pt-4 border-t border-border">
+                  <Button asChild variant="outline" className="h-11 rounded-xl font-semibold px-2 sm:px-5 border-slate-200 text-slate-700 hover:bg-slate-50">
                     <Link href={`/dashboard/events/${event.id}`}>
+                      <Eye className="hidden sm:block" />
                       Detalhes
                     </Link>
                   </Button>
-                  <Button asChild size="sm" className="flex-1 sm:flex-none bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-white rounded-xl h-12 sm:h-10 font-semibold px-5">
-                    <Link href="/dashboard/budgets/new">Orçamento</Link>
+                  <Button asChild variant="outline" className="h-11 rounded-xl font-semibold px-2 sm:px-5 border-slate-200 text-slate-700 hover:bg-slate-50">
+                    <Link href={`/dashboard/events/${event.id}/edit`}>
+                      <Pencil className="hidden sm:block" />
+                      Editar
+                    </Link>
+                  </Button>
+                  <Button asChild className="h-11 rounded-xl font-semibold px-2 sm:px-5 bg-primary hover:bg-primary-dark text-white">
+                    <Link href="/dashboard/budgets/new">
+                      <FileText className="hidden sm:block" />
+                      Orçamento
+                    </Link>
                   </Button>
                 </div>
               </div>

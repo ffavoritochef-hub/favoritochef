@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminClient } from '@/lib/server-supabase';
 import { calcGuestPricing, calcDeposit, isProposalExpired } from '@/lib/buffet-rules';
 
@@ -15,8 +16,8 @@ export async function loadBudgetByToken(token: string) {
 }
 
 /** Orçamento mais recente do evento. */
-export async function loadLatestBudgetByEvent(eventId: string) {
-  const { data, error } = await adminClient()
+export async function loadLatestBudgetByEvent(eventId: string, db?: SupabaseClient) {
+  const { data, error } = await (db ?? adminClient())
     .from('budgets')
     .select(BUDGET_SELECT)
     .eq('event_id', eventId)

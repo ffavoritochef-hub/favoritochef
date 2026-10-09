@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminClient, isUuid, publicBaseUrl, requireUser } from '@/lib/server-supabase';
+import { isUuid, publicBaseUrl, requireUser } from '@/lib/server-supabase';
 import { buildProposalView, loadLatestBudgetByEvent } from '@/lib/proposal';
 import { formatBRL, proposalValidUntil } from '@/lib/buffet-rules';
 
@@ -26,14 +26,14 @@ function buildMessage(view: ReturnType<typeof buildProposalView>, url: string) {
 
 /** Marca a proposta como enviada e devolve o link público + link do WhatsApp. */
 export async function POST(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser(req);
-  if (!user) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+  const auth = await requireUser(req);
+  if (!auth) return NextResponse.json({ error: 'Sessão expirada ou inválida. Saia e entre novamente.' }, { status: 401 });
 
   const { eventId } = await params;
   if (!isUuid(eventId)) return NextResponse.json({ error: 'Evento inválido.' }, { status: 400 });
 
   try {
-    const budget = await loadLatestBudgetByEvent(eventId);
+    const budget = await loadLatestBudgetByEvent(eventId, auth.db);
     if (!budget) return NextResponse.json({ error: 'Crie um orçamento para este evento primeiro.' }, { status: 404 });
     if (budget.proposal_status === 'aceita') {
       return NextResponse.json({ error: 'Esta proposta já foi aceita pelo cliente.' }, { status: 409 });
@@ -43,7 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ eventId
       return NextResponse.json({ error: 'O valor da proposta está zerado.' }, { status: 400 });
     }
 
-    const db = adminClient();
+    const db = auth.db;
     const validUntil = proposalValidUntil();
     const { error } = await db
       .from('budgets')

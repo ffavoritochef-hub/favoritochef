@@ -307,7 +307,7 @@ export default function EmployeesPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => openDelete(employee)}
-                        className="h-11 w-11 rounded-xl text-slate-400 hover:text-destructive hover:bg-destructive/5 ml-auto sm:ml-0"
+                        className="size-11 shrink-0 rounded-xl border border-destructive/25 bg-destructive/5 text-destructive hover:bg-destructive hover:text-white" aria-label="Excluir"
                         title="Excluir"
                       >
                         <Trash2 className="w-5 h-5" />

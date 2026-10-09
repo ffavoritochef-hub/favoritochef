@@ -6,12 +6,12 @@ export const dynamic = 'force-dynamic';
 
 /** Mantida por compatibilidade: agora exige login. Use POST /send para enviar a proposta. */
 export async function GET(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser(req);
-  if (!user) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+  const auth = await requireUser(req);
+  if (!auth) return NextResponse.json({ error: 'Sessão expirada ou inválida. Saia e entre novamente.' }, { status: 401 });
   const { eventId } = await params;
   if (!isUuid(eventId)) return NextResponse.json({ link: null }, { status: 400 });
   try {
-    const b = await loadLatestBudgetByEvent(eventId);
+    const b = await loadLatestBudgetByEvent(eventId, auth.db);
     const client = b?.event?.client;
     const phone = String(client?.whatsapp || client?.phone || '').replace(/\D/g, '');
     if (!b || !phone) return NextResponse.json({ link: null });

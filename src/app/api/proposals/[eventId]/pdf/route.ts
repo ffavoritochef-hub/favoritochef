@@ -7,13 +7,13 @@ export const dynamic = 'force-dynamic';
 
 /** PDF interno (exige login). Aceita rascunho para pré-visualização. */
 export async function GET(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
-  const user = await requireUser(req);
-  if (!user) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+  const auth = await requireUser(req);
+  if (!auth) return NextResponse.json({ error: 'Sessão expirada ou inválida. Saia e entre novamente.' }, { status: 401 });
 
   const { eventId } = await params;
   if (!isUuid(eventId)) return NextResponse.json({ error: 'Evento inválido.' }, { status: 400 });
   try {
-    const budget = await loadLatestBudgetByEvent(eventId);
+    const budget = await loadLatestBudgetByEvent(eventId, auth.db);
     if (!budget) return NextResponse.json({ error: 'Este evento ainda não tem orçamento.' }, { status: 404 });
     const download = new URL(req.url).searchParams.get('download') === 'true';
     const view = buildProposalView(budget);

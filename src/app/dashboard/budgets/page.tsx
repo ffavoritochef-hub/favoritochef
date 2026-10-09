@@ -156,41 +156,29 @@ export default function BudgetsPage() {
                   </div>
                 </div>
                 
-                <div className="flex items-end justify-between border-t border-slate-100 pt-3 mt-3">
+                <div className="border-t border-slate-100 pt-3 mt-3 space-y-3">
                   <div>
                     <ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} />
                     <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mt-2">Valor Total</p>
-                    <p className="text-xl sm:text-2xl font-bold text-primary break-all">
+                    <p className="text-xl sm:text-2xl font-bold text-primary break-words">
                       R$ {Number(budget.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="border-primary/20 text-primary hover:bg-primary hover:text-white h-11 w-11 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center"
-                      onClick={() => handleDownloadPdf(budget.event_id)}
-                      title="Baixar PDF"
-                    >
-                      <Download className="w-4.5 h-4.5" />
+                  <Button
+                    className="w-full h-12 rounded-xl bg-success hover:bg-success/90 text-white font-semibold"
+                    onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
+                  >
+                    <MessageSquare />
+                    Enviar proposta no WhatsApp
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700" onClick={() => handleViewPdf(budget.event_id)}>
+                      <Eye />
+                      Ver proposta
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="border-success/20 text-success hover:bg-success hover:text-white h-11 w-11 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center"
-                      onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
-                      title="Enviar proposta por WhatsApp"
-                    >
-                      <MessageSquare className="w-4.5 h-4.5" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 h-11 w-11 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center"
-                      onClick={() => handleViewPdf(budget.event_id)}
-                      title="Visualizar Proposta"
-                    >
-                      <Eye className="w-4.5 h-4.5" />
+                    <Button variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700" onClick={() => handleDownloadPdf(budget.event_id)}>
+                      <Download />
+                      Baixar PDF
                     </Button>
                   </div>
                 </div>
@@ -258,33 +246,35 @@ export default function BudgetsPage() {
                       <div className="mt-1.5"><ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} /></div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="text-slate-400 hover:text-primary hover:bg-primary/5 h-10 w-10 rounded-lg"
-                        onClick={() => handleDownloadPdf(budget.event_id)}
-                        title="Baixar PDF"
-                      >
-                        <Download className="w-4.5 h-4.5" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="text-slate-400 hover:text-success hover:bg-success/5 h-10 w-10 rounded-lg"
+                    <div className="flex justify-end items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="h-10 rounded-lg bg-success hover:bg-success/90 text-white font-semibold px-3.5"
                         onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
                         title="Enviar proposta por WhatsApp"
                       >
-                        <MessageSquare className="w-4.5 h-4.5" />
+                        <MessageSquare />
+                        Enviar
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="text-slate-400 hover:text-slate-900 hover:bg-slate-50 h-10 w-10 rounded-lg"
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-primary hover:bg-primary/5"
                         onClick={() => handleViewPdf(budget.event_id)}
-                        title="Visualizar Proposta"
+                        title="Ver proposta"
+                        aria-label="Ver proposta"
                       >
-                        <Eye className="w-4.5 h-4.5" />
+                        <Eye />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-primary hover:bg-primary/5"
+                        onClick={() => handleDownloadPdf(budget.event_id)}
+                        title="Baixar PDF"
+                        aria-label="Baixar PDF"
+                      >
+                        <Download />
                       </Button>
                     </div>
                   </TableCell>
