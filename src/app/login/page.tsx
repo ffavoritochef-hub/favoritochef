@@ -139,7 +139,7 @@ export default function LoginPage() {
               <Button 
                 type="submit" 
                 size="lg"
-                className="w-full h-12 bg-primary hover:bg-primary-dark text-white text-base font-semibold rounded-xl shadow-sm shadow-primary/20 transition-all" 
+                className="w-full text-base font-semibold leading-normal rounded-xl px-6" 
                 disabled={loading}
               >
                 {loading ? 'Autenticando...' : 'Entrar no Sistema'}
