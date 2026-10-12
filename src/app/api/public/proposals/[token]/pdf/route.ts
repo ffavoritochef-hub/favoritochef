@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isUuid, publicBaseUrl } from '@/lib/server-supabase';
-import { buildProposalView, loadBudgetByToken } from '@/lib/proposal';
+import { buildProposalView, loadBrand, loadBudgetByToken } from '@/lib/proposal';
 import { buildProposalPdf } from '@/lib/proposal-pdf';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       return NextResponse.json({ error: 'Proposta não encontrada.' }, { status: 404 });
     }
     const download = new URL(req.url).searchParams.get('download') === 'true';
-    const view = buildProposalView(budget);
+    const { brand, active } = await loadBrand(budget.tenant_id);
+    if (!active) return NextResponse.json({ error: 'Proposta indisponível no momento.' }, { status: 404 });
+    const view = buildProposalView(budget, brand);
     const pdf = await buildProposalPdf(view, `${publicBaseUrl(req)}/proposta/${token}`);
     return new NextResponse(new Uint8Array(pdf), {
       headers: {

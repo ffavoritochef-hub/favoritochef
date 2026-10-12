@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isUuid, publicBaseUrl, requireUser } from '@/lib/server-supabase';
-import { loadLatestBudgetByEvent } from '@/lib/proposal';
+import { loadBrand, loadLatestBudgetByEvent } from '@/lib/proposal';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ eventId:
     if (!b || !phone) return NextResponse.json({ link: null });
     const to = phone.length <= 11 && !phone.startsWith('55') ? '55' + phone : phone;
     const url = `${publicBaseUrl(req)}/proposta/${b.proposal_token}`;
-    const text = `Olá ${client.name}, segue a proposta do evento ${b.event.name}: ${url}`;
+    const { brand } = await loadBrand(b.tenant_id, auth.db);
+    const text = `Olá ${client.name}, aqui é do ${brand.name}. Segue a proposta do evento ${b.event.name}: ${url}`;
     return NextResponse.json({ link: `https://wa.me/${to}?text=${encodeURIComponent(text)}` });
   } catch (e) {
     console.error('whatsapp', e);

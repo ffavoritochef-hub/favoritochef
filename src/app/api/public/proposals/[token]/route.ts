@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminClient, isUuid } from '@/lib/server-supabase';
-import { buildProposalView, loadBudgetByToken } from '@/lib/proposal';
+import { buildProposalView, loadBrand, loadBudgetByToken } from '@/lib/proposal';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     if (!budget || budget.proposal_status === 'rascunho') {
       return NextResponse.json({ error: 'Proposta não encontrada.' }, { status: 404 });
     }
-    return NextResponse.json(buildProposalView(budget), noStore);
+    const { brand, active } = await loadBrand(budget.tenant_id);
+    if (!active) return NextResponse.json({ error: 'Proposta indisponível no momento.' }, { status: 404 });
+    return NextResponse.json(buildProposalView(budget, brand), noStore);
   } catch (e) {
     console.error('proposal GET', e);
     return NextResponse.json({ error: 'Erro ao carregar proposta.' }, { status: 500 });
@@ -42,7 +44,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     if (!budget || budget.proposal_status === 'rascunho') {
       return NextResponse.json({ error: 'Proposta não encontrada.' }, { status: 404 });
     }
-    const view = buildProposalView(budget);
+    const { brand, active } = await loadBrand(budget.tenant_id);
+    if (!active) return NextResponse.json({ error: 'Proposta indisponível no momento.' }, { status: 404 });
+    const view = buildProposalView(budget, brand);
     if (view.status !== 'enviada') {
       const msg =
         view.status === 'expirada'
@@ -78,7 +82,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     }
 
     const fresh = await loadBudgetByToken(token);
-    return NextResponse.json(buildProposalView(fresh), noStore);
+    return NextResponse.json(buildProposalView(fresh, brand), noStore);
   } catch (e) {
     console.error('proposal POST', e);
     return NextResponse.json({ error: 'Erro ao registrar resposta.' }, { status: 500 });

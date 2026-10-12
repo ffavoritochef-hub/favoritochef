@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminClient } from '@/lib/server-supabase';
+import { DEFAULT_COLOR, computeAccess, safeColor } from '@/lib/tenant';
 import { calcGuestPricing, calcDeposit, isProposalExpired } from '@/lib/buffet-rules';
 
 const BUDGET_SELECT =
@@ -28,7 +29,31 @@ export async function loadLatestBudgetByEvent(eventId: string, db?: SupabaseClie
   return data as any | null;
 }
 
+export interface ProposalBrand {
+  name: string;
+  logoUrl: string | null;
+  color: string;
+}
+
+export const DEFAULT_BRAND: ProposalBrand = { name: 'Buffet', logoUrl: null, color: DEFAULT_COLOR };
+
+/** Carrega a marca do buffet. `active` = buffet aprovado e dentro do prazo. */
+export async function loadBrand(tenantId: string | null | undefined, db?: SupabaseClient): Promise<{ brand: ProposalBrand; active: boolean }> {
+  if (!tenantId) return { brand: DEFAULT_BRAND, active: false };
+  const { data } = await (db ?? adminClient())
+    .from('tenants')
+    .select('name, logo_url, primary_color, status, valid_until')
+    .eq('id', tenantId)
+    .maybeSingle();
+  if (!data) return { brand: DEFAULT_BRAND, active: false };
+  return {
+    brand: { name: data.name || 'Buffet', logoUrl: data.logo_url ?? null, color: safeColor(data.primary_color) },
+    active: computeAccess({ status: data.status, valid_until: data.valid_until }, false) === 'ativo',
+  };
+}
+
 export interface ProposalView {
+  brand: ProposalBrand;
   token: string;
   status: 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'expirada';
   validUntil: string | null;
@@ -43,7 +68,7 @@ export interface ProposalView {
 }
 
 /** Visão pública: NUNCA inclui custos internos nem margem. */
-export function buildProposalView(b: any): ProposalView {
+export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND): ProposalView {
   const ev = b.event ?? {};
   let lines: { label: string; value: number }[] = [];
   let total = Number(b.total_value) || 0;
@@ -88,6 +113,7 @@ export function buildProposalView(b: any): ProposalView {
   if (status === 'enviada' && isProposalExpired(b.proposal_valid_until)) status = 'expirada';
 
   return {
+    brand,
     token: b.proposal_token,
     status,
     validUntil: b.proposal_valid_until ?? null,

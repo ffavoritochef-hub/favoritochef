@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isUuid, publicBaseUrl, requireUser } from '@/lib/server-supabase';
-import { buildProposalView, loadLatestBudgetByEvent } from '@/lib/proposal';
+import { buildProposalView, loadBrand, loadLatestBudgetByEvent } from '@/lib/proposal';
 import { formatBRL, proposalValidUntil } from '@/lib/buffet-rules';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ function whatsappLink(client: any, message: string): string | null {
 function buildMessage(view: ReturnType<typeof buildProposalView>, url: string) {
   const d = view.event.date ? new Date(view.event.date + 'T12:00:00').toLocaleDateString('pt-BR') : '';
   return (
-    `Olá ${view.clientName}! Segue a proposta do buffet para o evento *${view.event.name}*` +
+    `Olá ${view.clientName}! Aqui é do *${view.brand.name}*. Segue a proposta para o evento *${view.event.name}*` +
     `${d ? ` (${d})` : ''}.\n\nValor total: *${formatBRL(view.total)}*\n` +
     `Sinal de ${view.deposit.percent}%: ${formatBRL(view.deposit.amount)}\n\n` +
     `Veja os detalhes e aceite online: ${url}\n` +
@@ -38,7 +38,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ eventId
     if (budget.proposal_status === 'aceita') {
       return NextResponse.json({ error: 'Esta proposta já foi aceita pelo cliente.' }, { status: 409 });
     }
-    const before = buildProposalView(budget);
+    const { brand } = await loadBrand(budget.tenant_id, auth.db);
+    const before = buildProposalView(budget, brand);
     if (!(before.total > 0)) {
       return NextResponse.json({ error: 'O valor da proposta está zerado.' }, { status: 400 });
     }
@@ -62,7 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ eventId
     }
 
     const url = `${publicBaseUrl(req)}/proposta/${budget.proposal_token}`;
-    const view = buildProposalView({ ...budget, proposal_status: 'enviada', proposal_valid_until: validUntil });
+    const view = buildProposalView({ ...budget, proposal_status: 'enviada', proposal_valid_until: validUntil }, brand);
     const link = whatsappLink(budget.event?.client, buildMessage(view, url));
     return NextResponse.json({ publicUrl: url, whatsappLink: link, validUntil, hasPhone: !!link });
   } catch (e) {

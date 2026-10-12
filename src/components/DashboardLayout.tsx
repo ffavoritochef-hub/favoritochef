@@ -1,6 +1,8 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
+import { BlockedScreen } from '@/components/AccessGate';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
@@ -18,6 +20,8 @@ import {
   Home,
   MoreHorizontal,
   HardHat,
+  Settings,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -40,6 +44,7 @@ const menuItems = [
   { title: 'Cardápio', icon: Utensils, url: '/dashboard/menu' },
   { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets' },
   { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance' },
+  { title: 'Configurações', icon: Settings, url: '/dashboard/settings' },
 ];
 
 const isRouteActive = (pathname: string, url: string) =>
@@ -59,14 +64,25 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const { signOut, user } = useAuth();
+  const { tenant } = useTenant();
   const pathname = usePathname();
 
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="p-5 sm:p-6 border-b border-border">
-        <h2 className="text-xl sm:text-2xl font-bold text-primary tracking-tight">
-          Agenda Buffet
-        </h2>
+        <div className="flex items-center gap-3 min-w-0">
+          {tenant?.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={tenant.logo_url} alt={tenant.name} className="w-11 h-11 rounded-xl object-contain bg-white border border-border shrink-0" />
+          ) : (
+            <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center shrink-0">
+              <UtensilsCrossed className="w-5 h-5 text-white" />
+            </div>
+          )}
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-tight line-clamp-2">
+            {tenant?.name || 'Agenda Buffet'}
+          </h2>
+        </div>
       </div>
 
       <nav className="flex-1 p-3 sm:p-4 space-y-1 overflow-y-auto">
@@ -121,6 +137,7 @@ function SidebarContent({
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { access, tenant } = useTenant();
   const router = useRouter();
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -132,7 +149,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, router]);
 
-  if (loading)
+  useEffect(() => {
+    if (access === 'master') router.replace('/master');
+  }, [access, router]);
+
+  if (loading || access === 'loading' || access === 'master')
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -140,6 +161,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
 
   if (!user) return null;
+
+  if (access !== 'ativo') return <BlockedScreen />;
 
   return (
     <div className="flex min-h-screen w-full bg-background text-slate-900">
@@ -170,9 +193,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex-1 min-w-0 px-2">
             <h1 className="font-bold text-base truncate">
-              Olá, {user.email?.split('@')[0]}! 👋
+              {tenant?.name || 'Agenda Buffet'}
             </h1>
-            <p className="text-xs text-white/80 truncate">Bem-vindo ao seu sistema</p>
+            <p className="text-xs text-white/80 truncate">Olá, {user.email?.split('@')[0]}</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-10 w-10">

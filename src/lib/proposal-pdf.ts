@@ -1,6 +1,7 @@
 import type { ProposalView } from '@/lib/proposal';
 
-const BRAND = '#2563EB';
+import { safeColor } from '@/lib/tenant';
+
 const DARK = '#0F172A';
 const MUTED = '#64748B';
 const LINE = '#E2E8F0';
@@ -9,8 +10,30 @@ const SOFT = '#F1F5F9';
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dateBR = (d: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '-');
 
-/** Gera o PDF da proposta (A4). Retorna Buffer. */
-export function buildProposalPdf(v: ProposalView, publicUrl?: string): Promise<Buffer> {
+/** Baixa a logo do buffet (só do bucket público do próprio projeto; PNG/JPG). Falha => null. */
+async function fetchLogo(url: string | null | undefined): Promise<Buffer | null> {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url || !base || !url.startsWith(`${base}/storage/v1/object/public/tenant-logos/`)) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const type = res.headers.get('content-type') || '';
+    if (!/image\/(png|jpe?g)/.test(type)) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf.length > 0 && buf.length < 3 * 1024 * 1024 ? buf : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Gera o PDF da proposta (A4) com a marca do buffet. Retorna Buffer. */
+export async function buildProposalPdf(v: ProposalView, publicUrl?: string): Promise<Buffer> {
+  const logo = await fetchLogo(v.brand?.logoUrl);
+  const BRAND = safeColor(v.brand?.color);
+  const brandName = v.brand?.name || 'Buffet';
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const PDFKit = require('pdfkit');
   const PDFDocument = PDFKit.default || PDFKit;
@@ -40,9 +63,19 @@ export function buildProposalPdf(v: ProposalView, publicUrl?: string): Promise<B
 
     // Cabeçalho
     doc.rect(0, 0, W, 110).fill(BRAND);
-    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(24).text('Proposta Comercial', L, 36);
-    doc.font('Helvetica').fontSize(11).fillColor('#DBEAFE').text('Agenda Buffet · Gestão de Eventos', L, 68);
-    doc.font('Helvetica').fontSize(9).fillColor('#DBEAFE')
+    let tx = L;
+    if (logo) {
+      try {
+        doc.roundedRect(L, 22, 66, 66, 8).fill('#FFFFFF');
+        doc.image(logo, L + 4, 26, { fit: [58, 58], align: 'center', valign: 'center' });
+        tx = L + 82;
+      } catch {
+        tx = L;
+      }
+    }
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(24).text('Proposta Comercial', tx, 36, { width: CW - (tx - L) - 120, lineBreak: false });
+    doc.font('Helvetica').fontSize(11).fillColor('#FFFFFF').text(brandName, tx, 68, { width: CW - (tx - L) - 120, lineBreak: false, ellipsis: true });
+    doc.font('Helvetica').fontSize(9).fillColor('#FFFFFF')
       .text(`Válida até ${v.validUntil ? dateBR(v.validUntil) : '—'}`, L, 40, { width: CW, align: 'right' });
     doc.y = 130;
 
@@ -133,7 +166,7 @@ export function buildProposalPdf(v: ProposalView, publicUrl?: string): Promise<B
       doc.switchToPage(i);
       doc.page.margins.bottom = 0; // evita criar página nova ao escrever no rodapé
       doc.fillColor('#94A3B8').font('Helvetica').fontSize(8).text(
-        `Agenda Buffet · Documento gerado automaticamente · Página ${i + 1} de ${pages.count}`,
+        `${brandName} · Documento gerado automaticamente · Página ${i + 1} de ${pages.count}`,
         L, doc.page.height - 36, { width: CW, align: 'center', lineBreak: false }
       );
     }

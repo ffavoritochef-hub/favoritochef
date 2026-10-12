@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isUuid, publicBaseUrl, requireUser } from '@/lib/server-supabase';
-import { buildProposalView, loadLatestBudgetByEvent } from '@/lib/proposal';
+import { buildProposalView, loadBrand, loadLatestBudgetByEvent } from '@/lib/proposal';
 import { buildProposalPdf } from '@/lib/proposal-pdf';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ eventId:
     const budget = await loadLatestBudgetByEvent(eventId, auth.db);
     if (!budget) return NextResponse.json({ error: 'Este evento ainda não tem orçamento.' }, { status: 404 });
     const download = new URL(req.url).searchParams.get('download') === 'true';
-    const view = buildProposalView(budget);
+    const { brand } = await loadBrand(budget.tenant_id, auth.db);
+    const view = buildProposalView(budget, brand);
     const pdf = await buildProposalPdf(view, `${publicBaseUrl(req)}/proposta/${budget.proposal_token}`);
     return new NextResponse(new Uint8Array(pdf), {
       headers: {

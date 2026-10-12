@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatBRL } from '@/lib/buffet-rules';
 import type { ProposalView } from '@/lib/proposal';
+import { darken } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,15 +91,23 @@ export default function PublicProposalPage() {
   const canRespond = view.status === 'enviada';
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-40 sm:pb-16">
+    <div
+      className="min-h-screen bg-slate-50 pb-40 sm:pb-16"
+      style={{ ['--primary' as string]: view.brand.color, ['--primary-dark' as string]: darken(view.brand.color) } as React.CSSProperties}
+    >
       <header className="bg-primary text-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex items-center gap-3">
-          <span className="inline-flex size-11 items-center justify-center rounded-xl bg-white/15">
-            <UtensilsCrossed className="size-6" />
-          </span>
+          {view.brand.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={view.brand.logoUrl} alt={view.brand.name} className="size-14 rounded-xl bg-white object-contain p-1 shrink-0" />
+          ) : (
+            <span className="inline-flex size-11 items-center justify-center rounded-xl bg-white/15">
+              <UtensilsCrossed className="size-6" />
+            </span>
+          )}
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-widest text-white/70 font-semibold">Proposta comercial</p>
-            <h1 className="text-xl sm:text-2xl font-bold truncate">Agenda Buffet</h1>
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{view.brand.name}</h1>
           </div>
         </div>
       </header>

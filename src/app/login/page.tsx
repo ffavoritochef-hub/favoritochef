@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -147,6 +148,11 @@ export default function LoginPage() {
             </CardFooter>
           </form>
         </Card>
+
+        <div className="text-center text-sm text-slate-600 bg-white border border-border rounded-xl p-4">
+          Tem um buffet e quer usar o sistema?{' '}
+          <Link href="/cadastro" className="text-primary font-semibold hover:underline">Cadastrar meu buffet</Link>
+        </div>
 
         <p className="text-center text-xs text-slate-400">
           © 2026 Agenda Buffet. Todos os direitos reservados.
