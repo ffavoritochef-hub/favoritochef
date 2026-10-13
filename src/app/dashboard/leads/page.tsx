@@ -4,29 +4,48 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
+  BellRing,
   Calendar,
+  ChevronRight,
   Copy,
+  HandCoins,
   Inbox,
   Link2,
   MessageCircle,
   PartyPopper,
   Share2,
-  Trash2,
-  UserPlus,
   Users,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/contexts/TenantContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { LEAD_STATUS, type Lead, type LeadStatus, whatsappUrl } from '@/lib/leads';
+import { formatBRL } from '@/lib/buffet-rules';
+import {
+  LEAD_STATUS,
+  LEAD_TEMPERATURE,
+  OFFER_REACTION,
+  followUpState,
+  localTodayIso,
+  whatsappUrl,
+  type Lead,
+  type LeadOffer,
+  type LeadStatus,
+  type LeadTemperature,
+} from '@/lib/leads';
 import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
 type Filter = LeadStatus | 'todos';
+type TempFilter = LeadTemperature | 'todas';
 const FILTERS: Filter[] = ['novo', 'em_contato', 'convertido', 'perdido', 'todos'];
+
+type OfferSummary = Pick<LeadOffer, 'price_per_person' | 'reaction' | 'created_at'>;
+type LeadRow = Lead & { offers?: OfferSummary[] };
+
+const lastOfferOf = (l: LeadRow): OfferSummary | null =>
+  (l.offers ?? []).reduce<OfferSummary | null>((acc, o) => (!acc || o.created_at > acc.created_at ? o : acc), null);
 
 const dateBR = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -40,18 +59,27 @@ function receivedAt(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+const chipCls = (on: boolean) =>
+  cn(
+    'shrink-0 h-10 px-4 rounded-full border text-sm font-semibold transition-colors',
+    on ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-border hover:bg-slate-50'
+  );
+
 export default function LeadsPage() {
   const { tenant } = useTenant();
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<LeadRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('novo');
-  const [toDelete, setToDelete] = useState<Lead | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [temp, setTemp] = useState<TempFilter>('todas');
+  const [onlyFollowUp, setOnlyFollowUp] = useState(false);
 
   const fetchLeads = useCallback(async () => {
-    const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*, offers:lead_offers(price_per_person, reaction, created_at)')
+      .order('created_at', { ascending: false });
     if (error) toast.error('Erro ao carregar leads: ' + error.message);
-    else setLeads((data as Lead[]) || []);
+    else setLeads((data as LeadRow[]) || []);
     setLoading(false);
   }, []);
 
@@ -66,13 +94,25 @@ export default function LeadsPage() {
     };
   }, [fetchLeads]);
 
+  const today = localTodayIso();
+  const isDue = useCallback(
+    (l: Lead) => {
+      const s = followUpState(l.next_contact_at, today);
+      return (s === 'hoje' || s === 'atrasado') && l.status !== 'convertido' && l.status !== 'perdido';
+    },
+    [today]
+  );
+
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { novo: 0, em_contato: 0, convertido: 0, perdido: 0, todos: leads.length };
     for (const l of leads) c[l.status]++;
     return c;
   }, [leads]);
+  const dueCount = useMemo(() => leads.filter(isDue).length, [leads, isDue]);
 
-  const visible = filter === 'todos' ? leads : leads.filter((l) => l.status === filter);
+  const visible = onlyFollowUp
+    ? leads.filter(isDue).sort((a, b) => (a.next_contact_at! < b.next_contact_at! ? -1 : 1))
+    : leads.filter((l) => (filter === 'todos' || l.status === filter) && (temp === 'todas' || l.temperature === temp));
 
   const publicUrl = tenant?.slug && typeof window !== 'undefined' ? `${window.location.origin}/orcamento/${tenant.slug}` : '';
   const instagramUrl = publicUrl ? `${publicUrl}?origem=instagram` : '';
@@ -98,55 +138,15 @@ export default function LeadsPage() {
     }
   }
 
-  async function updateLead(lead: Lead, patch: Partial<Lead>, okMsg?: string) {
-    setBusyId(lead.id);
-    const { error } = await supabase.from('leads').update(patch).eq('id', lead.id);
-    setBusyId(null);
-    if (error) return toast.error(error.message);
-    setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, ...patch } : l)));
-    if (okMsg) toast.success(okMsg);
-  }
-
-  function openWhatsapp(lead: Lead) {
+  async function openWhatsapp(lead: Lead) {
     const first = lead.name.split(' ')[0];
     const url = whatsappUrl(lead.phone, `Olá, ${first}! Aqui é do ${tenant?.name ?? 'buffet'}. Recebemos seu pedido de orçamento 😊`);
     if (!url) return toast.error('Telefone inválido.');
     window.open(url, '_blank', 'noopener,noreferrer');
-    if (lead.status === 'novo') updateLead(lead, { status: 'em_contato' });
-  }
-
-  async function convert(lead: Lead) {
-    setBusyId(lead.id);
-    try {
-      const { data, error } = await supabase
-        .from('clients')
-        .insert([{ name: lead.name, whatsapp: lead.phone, phone: '', email: '', document: '' }])
-        .select('id')
-        .single();
-      if (error) throw error;
-      const patch = { status: 'convertido' as const, client_id: data.id };
-      const { error: upErr } = await supabase.from('leads').update(patch).eq('id', lead.id);
-      if (upErr) throw upErr;
-      setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, ...patch } : l)));
-      toast.success(`${lead.name} agora é um cliente!`, {
-        action: { label: 'Criar evento', onClick: () => (window.location.href = '/dashboard/events/new') },
-      });
-    } catch (e) {
-      toast.error('Erro ao converter: ' + (e as Error).message);
-    } finally {
-      setBusyId(null);
+    if (lead.status === 'novo') {
+      const { error } = await supabase.from('leads').update({ status: 'em_contato' }).eq('id', lead.id);
+      if (!error) setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, status: 'em_contato' } : l)));
     }
-  }
-
-  async function confirmDelete() {
-    if (!toDelete) return;
-    setBusyId(toDelete.id);
-    const { error } = await supabase.from('leads').delete().eq('id', toDelete.id);
-    setBusyId(null);
-    if (error) return toast.error(error.message);
-    setLeads((ls) => ls.filter((l) => l.id !== toDelete.id));
-    setToDelete(null);
-    toast.success('Lead excluído.');
   }
 
   return (
@@ -183,21 +183,48 @@ export default function LeadsPage() {
         </p>
       </section>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setFilter(f)}
-            className={cn(
-              'shrink-0 h-10 px-4 rounded-full border text-sm font-semibold transition-colors',
-              filter === f ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-border hover:bg-slate-50'
-            )}
-          >
-            {f === 'todos' ? 'Todos' : LEAD_STATUS[f].label} <span className="opacity-70">({counts[f]})</span>
-          </button>
-        ))}
-      </div>
+      {dueCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setOnlyFollowUp((v) => !v)}
+          className={cn(
+            'w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors',
+            onlyFollowUp ? 'bg-warning text-white border-warning' : 'bg-warning/10 border-warning/30 text-slate-900 hover:bg-warning/15'
+          )}
+        >
+          <BellRing className={cn('size-6 shrink-0', onlyFollowUp ? 'text-white' : 'text-warning')} />
+          <span className="flex-1 min-w-0">
+            <span className="block font-bold">
+              {dueCount} {dueCount === 1 ? 'lead para retornar' : 'leads para retornar'} hoje
+            </span>
+            <span className={cn('block text-sm', onlyFollowUp ? 'text-white/90' : 'text-slate-500')}>
+              {onlyFollowUp ? 'Toque para ver todos os leads' : 'Toque para ver só os retornos (inclui atrasados)'}
+            </span>
+          </span>
+        </button>
+      )}
+
+      {!onlyFollowUp && (
+        <div className="space-y-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {FILTERS.map((f) => (
+              <button key={f} type="button" onClick={() => setFilter(f)} className={chipCls(filter === f)}>
+                {f === 'todos' ? 'Todos' : LEAD_STATUS[f].label} <span className="opacity-70">({counts[f]})</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            <button type="button" onClick={() => setTemp('todas')} className={chipCls(temp === 'todas')}>
+              Todas temperaturas
+            </button>
+            {(Object.keys(LEAD_TEMPERATURE) as LeadTemperature[]).map((t) => (
+              <button key={t} type="button" onClick={() => setTemp(t)} className={chipCls(temp === t)}>
+                {LEAD_TEMPERATURE[t].emoji} {LEAD_TEMPERATURE[t].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-48 rounded-2xl border border-border bg-white text-slate-500 gap-3">
@@ -207,78 +234,92 @@ export default function LeadsPage() {
       ) : visible.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-56 border-2 border-dashed border-border bg-white rounded-2xl text-center p-6">
           <Inbox className="size-12 mb-3 text-primary/40" />
-          <p className="font-semibold text-slate-900">Nenhum lead {filter === 'todos' ? 'ainda' : `com status "${LEAD_STATUS[filter as LeadStatus].label}"`}.</p>
-          <p className="text-sm text-slate-500 mt-1">Divulgue seu link para começar a receber pedidos.</p>
+          <p className="font-semibold text-slate-900">Nenhum lead encontrado com esses filtros.</p>
+          <p className="text-sm text-slate-500 mt-1">Divulgue seu link para receber mais pedidos.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
           {visible.map((lead) => {
             const st = LEAD_STATUS[lead.status];
-            const busy = busyId === lead.id;
+            const tp = lead.temperature ? LEAD_TEMPERATURE[lead.temperature] : null;
+            const last = lastOfferOf(lead);
+            const nOffers = lead.offers?.length ?? 0;
+            const fu = lead.status === 'convertido' || lead.status === 'perdido' ? null : followUpState(lead.next_contact_at, today);
             return (
-              <article key={lead.id} className="rounded-2xl border border-border bg-white shadow-card p-4 sm:p-5 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-900 text-lg truncate">{lead.name}</p>
-                    <p className="text-sm text-slate-500">{lead.phone}</p>
+              <article key={lead.id} className="rounded-2xl border border-border bg-white shadow-card hover:shadow-card-hover transition-shadow">
+                <Link href={`/dashboard/leads/${lead.id}`} className="block p-4 sm:p-5 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 text-lg truncate">{lead.name}</p>
+                      <p className="text-sm text-slate-500">{lead.phone}</p>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-1.5 shrink-0">
+                      {tp && (
+                        <Badge className={cn('rounded-full border', tp.className)}>
+                          {tp.emoji} {tp.label}
+                        </Badge>
+                      )}
+                      <Badge className={cn('rounded-full border', st.className)}>{st.label}</Badge>
+                    </div>
                   </div>
-                  <Badge className={cn('rounded-full border shrink-0', st.className)}>{st.label}</Badge>
-                </div>
 
-                <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-slate-600">
-                  {lead.event_type && (
-                    <span className="inline-flex items-center gap-1.5"><PartyPopper className="size-4 text-primary" />{lead.event_type}</span>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-slate-600">
+                    {lead.event_type && (
+                      <span className="inline-flex items-center gap-1.5"><PartyPopper className="size-4 text-primary" />{lead.event_type}</span>
+                    )}
+                    {lead.event_date && (
+                      <span className="inline-flex items-center gap-1.5"><Calendar className="size-4 text-primary" />{dateBR(lead.event_date)}</span>
+                    )}
+                    {lead.guests && (
+                      <span className="inline-flex items-center gap-1.5"><Users className="size-4 text-primary" />{lead.guests} convidados</span>
+                    )}
+                  </div>
+
+                  {last && (
+                    <div className="flex flex-wrap items-center gap-2 text-sm bg-slate-50 rounded-xl px-3 py-2">
+                      <HandCoins className="size-4 text-primary shrink-0" />
+                      <span className="text-slate-700">
+                        {nOffers > 1 ? `${nOffers} ofertas · última ` : 'Oferta '}
+                        <strong>{formatBRL(Number(last.price_per_person))}</strong>/pessoa
+                      </span>
+                      {last.reaction && (
+                        <span className={cn('text-xs font-semibold rounded-full border px-2 py-0.5', OFFER_REACTION[last.reaction].className)}>
+                          {OFFER_REACTION[last.reaction].emoji} {OFFER_REACTION[last.reaction].label}
+                        </span>
+                      )}
+                    </div>
                   )}
-                  {lead.event_date && (
-                    <span className="inline-flex items-center gap-1.5"><Calendar className="size-4 text-primary" />{dateBR(lead.event_date)}</span>
+
+                  {!last && lead.notes && (
+                    <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3 whitespace-pre-line break-words line-clamp-3">{lead.notes}</p>
                   )}
-                  {lead.guests && (
-                    <span className="inline-flex items-center gap-1.5"><Users className="size-4 text-primary" />{lead.guests} convidados</span>
-                  )}
-                </div>
 
-                {lead.notes && <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3 whitespace-pre-line break-words">{lead.notes}</p>}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    <span className="text-slate-400">
+                      Recebido {receivedAt(lead.created_at)} · via {lead.source}
+                    </span>
+                    {fu && lead.next_contact_at && (
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 font-semibold',
+                          fu === 'atrasado' ? 'text-destructive' : fu === 'hoje' ? 'text-warning' : 'text-slate-500'
+                        )}
+                      >
+                        <BellRing className="size-3.5" />
+                        {fu === 'atrasado' ? 'Retorno atrasado' : fu === 'hoje' ? 'Retornar hoje' : `Retorno ${dateBR(lead.next_contact_at)}`}
+                      </span>
+                    )}
+                  </div>
+                </Link>
 
-                <p className="text-xs text-slate-400">
-                  Recebido {receivedAt(lead.created_at)} · via {lead.source === 'link' ? 'link' : lead.source}
-                </p>
-
-                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => openWhatsapp(lead)}
-                    className="gap-1.5 bg-[#25D366] hover:bg-[#1EBE5A] text-white"
-                  >
+                <div className="flex items-center gap-2 px-4 sm:px-5 py-3 border-t border-slate-100">
+                  <Button type="button" size="sm" onClick={() => openWhatsapp(lead)} className="gap-1.5 bg-[#25D366] hover:bg-[#1EBE5A] text-white">
                     <MessageCircle className="size-4" /> WhatsApp
                   </Button>
-                  {!lead.client_id && lead.status !== 'perdido' && (
-                    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => convert(lead)} className="gap-1.5">
-                      <UserPlus className="size-4" /> Virar cliente
-                    </Button>
-                  )}
-                  <select
-                    value={lead.status}
-                    disabled={busy}
-                    onChange={(e) => updateLead(lead, { status: e.target.value as LeadStatus }, 'Status atualizado.')}
-                    className="h-10 rounded-lg border border-input bg-white px-2 text-sm text-slate-700"
-                    aria-label="Status do lead"
-                  >
-                    {(Object.keys(LEAD_STATUS) as LeadStatus[]).map((s) => (
-                      <option key={s} value={s}>{LEAD_STATUS[s].label}</option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => setToDelete(lead)}
-                    className="ml-auto text-slate-400 hover:text-destructive hover:bg-destructive/5"
-                    aria-label="Excluir lead"
-                    title="Excluir"
-                  >
-                    <Trash2 />
+                  <Button asChild size="sm" variant="outline" className="gap-1 ml-auto">
+                    <Link href={`/dashboard/leads/${lead.id}`}>
+                      Trabalhar lead <ChevronRight className="size-4" />
+                    </Link>
                   </Button>
                 </div>
               </article>
@@ -286,17 +327,6 @@ export default function LeadsPage() {
           })}
         </div>
       )}
-
-      <ConfirmDialog
-        open={!!toDelete}
-        onOpenChange={(v) => !v && !busyId && setToDelete(null)}
-        title={`Excluir o lead "${toDelete?.name ?? ''}"?`}
-        description="O pedido será removido permanentemente. Se ele já virou cliente, o cliente continua cadastrado."
-        variant="destructive"
-        confirmText="Sim, excluir"
-        onConfirm={confirmDelete}
-        loading={!!busyId}
-      />
     </div>
   );
 }
