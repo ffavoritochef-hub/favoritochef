@@ -6,6 +6,7 @@ export interface Tenant {
   id: string;
   owner_id: string;
   name: string;
+  slug: string;
   responsible_name: string | null;
   document: string | null;
   email: string | null;

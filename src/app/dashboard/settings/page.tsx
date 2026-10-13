@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { COLOR_PRESETS, daysLeft, isHexColor, isReadableOnWhiteText, darken } from '@/lib/tenant';
 import { resizeToPngBlob } from '@/lib/image-utils';
 import { cn } from '@/lib/utils';
+import { isValidSlug, slugify } from '@/lib/leads';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','P
 export default function SettingsPage() {
   const { tenant, refresh } = useTenant();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState({ name: '', responsible_name: '', phone: '', document: '', city: '', state: '' });
+  const [form, setForm] = useState({ name: '', slug: '', responsible_name: '', phone: '', document: '', city: '', state: '' });
   const [color, setColor] = useState('#2563EB');
   const [logo, setLogo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -30,6 +31,7 @@ export default function SettingsPage() {
     if (!tenant) return;
     setForm({
       name: tenant.name || '',
+      slug: tenant.slug || '',
       responsible_name: tenant.responsible_name || '',
       phone: tenant.phone || '',
       document: tenant.document || '',
@@ -80,11 +82,14 @@ export default function SettingsPage() {
     e.preventDefault();
     if (form.name.trim().length < 2) return toast.error('Informe o nome do buffet.');
     if (!colorOk) return toast.error('Escolha uma cor mais escura (o texto branco precisa ficar legível).');
+    const slug = slugify(form.slug);
+    if (form.slug && !isValidSlug(slug)) return toast.error('O endereço do link precisa ter de 3 a 60 letras, números ou hífens.');
     setSaving(true);
     const { error } = await supabase
       .from('tenants')
       .update({
         name: form.name.trim(),
+        ...(form.slug ? { slug } : {}),
         responsible_name: form.responsible_name.trim() || null,
         phone: form.phone.trim() || null,
         document: form.document.trim() || null,
@@ -94,7 +99,10 @@ export default function SettingsPage() {
       })
       .eq('id', tenant.id);
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      if (error.code === '23505') return toast.error('Esse endereço de link já está em uso por outro buffet. Escolha outro.');
+      return toast.error(error.message);
+    }
     await refresh();
     toast.success('Configurações salvas!');
   };
@@ -222,6 +230,22 @@ export default function SettingsPage() {
                   </select>
                 </div>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="slug">Endereço do link de orçamento</Label>
+              <div className="flex items-center rounded-xl border border-border bg-white h-12 overflow-hidden focus-within:border-primary">
+                <span className="pl-3 text-sm text-slate-400 whitespace-nowrap">/orcamento/</span>
+                <input
+                  id="slug"
+                  value={form.slug}
+                  onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') }))}
+                  onBlur={() => setForm((f) => ({ ...f, slug: slugify(f.slug) }))}
+                  maxLength={60}
+                  className="flex-1 min-w-0 h-full pr-3 bg-transparent outline-none text-base"
+                  placeholder="nome-do-buffet"
+                />
+              </div>
+              <p className="text-xs text-slate-500">É o link que os clientes usam para pedir orçamento (bio do Instagram). Se mudar, o link antigo para de funcionar.</p>
             </div>
             <p className="text-xs text-slate-400">E-mail de acesso: {tenant.email}</p>
           </CardContent>

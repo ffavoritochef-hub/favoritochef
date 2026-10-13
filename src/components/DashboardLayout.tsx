@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { BlockedScreen } from '@/components/AccessGate';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -22,6 +22,7 @@ import {
   HardHat,
   Settings,
   UtensilsCrossed,
+  Inbox,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -34,9 +35,12 @@ import {
 } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 const menuItems = [
   { title: 'Dashboard', icon: LayoutDashboard, url: '/dashboard' },
+  { title: 'Leads', icon: Inbox, url: '/dashboard/leads' },
   { title: 'Clientes', icon: Users, url: '/dashboard/clients' },
   { title: 'Eventos', icon: Calendar, url: '/dashboard/events' },
   { title: 'Agenda', icon: Calendar, url: '/dashboard/agenda' },
@@ -58,10 +62,54 @@ const bottomNavItems = [
   { title: 'Mais', icon: MoreHorizontal, url: '#more' },
 ];
 
+/** Quantidade de leads "novo"; avisa quando chega um pedido. */
+function useNewLeads(enabled: boolean) {
+  const [count, setCount] = useState(0);
+  const last = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const load = async () => {
+      const { count: c, error } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'novo');
+      if (!alive || error || c === null) return;
+      if (last.current !== null && c > last.current) {
+        toast.success(c - last.current === 1 ? 'Novo pedido de orçamento!' : `${c - last.current} novos pedidos de orçamento!`, {
+          action: { label: 'Ver', onClick: () => (window.location.href = '/dashboard/leads') },
+        });
+      }
+      last.current = c;
+      setCount(c);
+    };
+    load();
+    const id = setInterval(load, 60000);
+    window.addEventListener('focus', load);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      window.removeEventListener('focus', load);
+    };
+  }, [enabled]);
+
+  return count;
+}
+
+const CountBadge = ({ n, className }: { n: number; className?: string }) =>
+  n > 0 ? (
+    <span className={cn('min-w-5 h-5 px-1.5 rounded-full bg-destructive text-white text-[11px] font-bold leading-5 text-center', className)}>
+      {n > 99 ? '99+' : n}
+    </span>
+  ) : null;
+
 function SidebarContent({
   onNavigate,
+  newLeads = 0,
 }: {
   onNavigate?: () => void;
+  newLeads?: number;
 }) {
   const { signOut, user } = useAuth();
   const { tenant } = useTenant();
@@ -104,7 +152,8 @@ function SidebarContent({
             >
               <Icon className={cn('w-5 h-5 shrink-0', isActive ? 'text-white' : '')} />
               <span className="font-medium text-sm">{item.title}</span>
-              {isActive && <ChevronRight className="w-4 h-4 ml-auto shrink-0 opacity-80" />}
+              {item.url === '/dashboard/leads' && <CountBadge n={newLeads} className="ml-auto" />}
+              {isActive && <ChevronRight className={cn('w-4 h-4 shrink-0 opacity-80', !(item.url === '/dashboard/leads' && newLeads > 0) && 'ml-auto')} />}
             </Link>
           );
         })}
@@ -142,6 +191,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const newLeads = useNewLeads(!!user && access === 'ativo');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -167,7 +217,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen w-full bg-background text-slate-900">
       <aside className="hidden md:flex w-64 border-r border-border bg-white flex-col shrink-0 sticky top-0 h-screen">
-        <SidebarContent />
+        <SidebarContent newLeads={newLeads} />
       </aside>
 
       <main className="flex-1 overflow-y-auto min-w-0 flex flex-col">
@@ -187,7 +237,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <SheetHeader className="sr-only">
                 <SheetTitle>Menu</SheetTitle>
               </SheetHeader>
-              <SidebarContent onNavigate={() => setMobileMenuOpen(false)} />
+              <SidebarContent newLeads={newLeads} onNavigate={() => setMobileMenuOpen(false)} />
             </SheetContent>
           </Sheet>
 
@@ -198,8 +248,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-white/80 truncate">Olá, {user.email?.split('@')[0]}</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-10 w-10">
-              <Bell className="w-5 h-5" />
+            <Button asChild variant="ghost" size="icon" className="relative text-white hover:bg-white/10 h-10 w-10">
+              <Link href="/dashboard/leads" aria-label={newLeads > 0 ? `${newLeads} leads novos` : 'Leads'}>
+                <Bell className="w-5 h-5" />
+                <CountBadge n={newLeads} className="absolute -top-0.5 -right-0.5 ring-2 ring-primary" />
+              </Link>
             </Button>
           </div>
         </header>
@@ -224,7 +277,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 );
                 const inner = (
                   <>
-                    <Icon className={cn('w-5 h-5 shrink-0', isActive ? 'text-primary' : '')} />
+                    <span className="relative">
+                      <Icon className={cn('w-5 h-5 shrink-0', isActive ? 'text-primary' : '')} />
+                      {isMore && newLeads > 0 && <span className="absolute -top-0.5 -right-1 size-2.5 rounded-full bg-destructive ring-2 ring-white" />}
+                    </span>
                     <span className={cn('text-[10px] font-semibold truncate max-w-full px-1', isActive ? 'text-primary' : '')}>
                       {item.title}
                     </span>
