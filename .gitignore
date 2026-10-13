@@ -42,3 +42,14 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Android / APK
+android/*.keystore
+android/CHAVE-ASSINATURA.txt
+android/app/build/
+android/build/
+android/.gradle/
+android/*.apk
+android/*.aab
+android/*.idsig
+android/local.properties

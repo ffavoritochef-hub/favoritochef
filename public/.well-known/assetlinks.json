@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "digital.gerenciabuffet.app",
+      "sha256_cert_fingerprints": [
+        "11:79:14:BC:B8:1A:BC:55:19:49:6B:2C:5C:22:BF:C8:CE:46:2B:2E:EC:5F:0D:EA:B5:9C:B8:61:90:BB:42:87"
+      ]
+    }
+  }
+]
