@@ -181,7 +181,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent
               side="left"
-              className="w-[85%] max-w-[320px] p-0 bg-white border-r border-border"
+              className="w-[85%] data-[side=left]:max-w-[320px] p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] bg-white border-r border-border"
               showCloseButton={true}
             >
               <SheetHeader className="sr-only">

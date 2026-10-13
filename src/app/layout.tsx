@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -21,13 +21,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Agenda Buffet - Sistema Gerencial",
   description: "Sistema completo para gestão de buffet e eventos",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content",
-  themeColor: "#2563EB",
+  icons: { icon: "/icon-192.png", apple: "/icon-192.png" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Agenda Buffet",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+  themeColor: "#2563EB",
 };
 
 export const dynamic = 'force-dynamic';

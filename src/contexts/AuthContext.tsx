@@ -36,7 +36,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('Auth state changed:', event, session);
-        setUser(session?.user ?? null);
+        // Renovação de token/foco na aba emite um novo objeto de usuário;
+        // manter a referência evita recarregar o tenant e desmontar a tela.
+        const next = session?.user ?? null;
+        setUser((prev) => (prev?.id === next?.id ? prev : next));
         setLoading(false);
       }
     );
