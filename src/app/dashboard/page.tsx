@@ -126,7 +126,68 @@ export default function DashboardPage() {
         <p className="text-slate-500 mt-1.5 text-sm">Resumo do seu buffet neste mês.</p>
       </header>
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 w-full">
+      {/* Mobile: hero estilo app (continua a barra azul do topo) */}
+      <section className="md:hidden relative -mx-3 -mt-4 overflow-hidden rounded-b-[32px] bg-gradient-to-b from-primary to-primary-dark px-5 pt-3 pb-20 text-white">
+        <div className="pointer-events-none absolute -right-12 -top-16 size-48 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -left-10 bottom-2 size-28 rounded-full bg-white/5" />
+        <p className="relative text-xs font-medium capitalize text-white/70">
+          {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </p>
+        <p className="relative mt-4 text-[11px] font-semibold uppercase tracking-wider text-white/70">Resultado do mês</p>
+        {loading ? (
+          <div className="relative mt-1 h-10 w-44 animate-pulse rounded-lg bg-white/15" />
+        ) : (
+          <p className="relative text-[34px] font-bold leading-tight tracking-tight">{formatBRL(result)}</p>
+        )}
+        <div className="relative mt-2 flex flex-wrap gap-2 text-xs">
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
+            <TrendingUp className="size-3.5" /> {formatBRL(data.revenueMonth)}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
+            <TrendingDown className="size-3.5" /> {formatBRL(data.costsMonth)}
+          </span>
+        </div>
+      </section>
+
+      <div className="md:hidden relative -mt-[4.5rem] grid grid-cols-3 gap-2.5">
+        {[
+          { label: 'Eventos no mês', value: data.eventsMonth, icon: CalendarIcon, tone: toneBg.primary, href: '/dashboard/events' },
+          { label: 'Aguardando', value: data.awaiting, icon: FileText, tone: toneBg.warning, href: '/dashboard/budgets' },
+          { label: 'Clientes', value: data.clients, icon: Users, tone: 'bg-info/10 text-info', href: '/dashboard/clients' },
+        ].map((s) => (
+          <Link key={s.label} href={s.href} className="rounded-2xl bg-white p-3 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.18)]">
+            <span className={`flex size-8 items-center justify-center rounded-lg ${s.tone}`}>
+              <s.icon className="size-4" />
+            </span>
+            {loading ? (
+              <div className="mt-2 h-6 w-10 animate-pulse rounded bg-slate-100" />
+            ) : (
+              <p className="mt-2 text-xl font-bold leading-none text-slate-900">{s.value}</p>
+            )}
+            <p className="mt-1 truncate text-[11px] font-medium text-slate-500">{s.label}</p>
+          </Link>
+        ))}
+      </div>
+
+      <div className="md:hidden -mx-3 flex gap-4 overflow-x-auto px-4 pb-1 no-scrollbar">
+        {[
+          { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarIcon, bg: 'bg-primary/10 text-primary' },
+          { href: '/dashboard/budgets/new', label: 'Orçamento', icon: FileText, bg: 'bg-success/10 text-success' },
+          { href: '/dashboard/clients/new', label: 'Cliente', icon: Users, bg: 'bg-info/10 text-info' },
+          { href: '/dashboard/finance', label: 'Financeiro', icon: DollarSign, bg: 'bg-warning/10 text-warning' },
+          { href: '/dashboard/menu', label: 'Cardápio', icon: Utensils, bg: 'bg-highlight/10 text-highlight' },
+          { href: '/dashboard/employees', label: 'Equipe', icon: HardHat, bg: 'bg-slate-100 text-slate-600' },
+        ].map((q) => (
+          <Link key={q.href} href={q.href} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
+            <span className={`flex size-14 items-center justify-center rounded-full ${q.bg}`}>
+              <q.icon className="size-6" />
+            </span>
+            <span className="text-[11px] font-medium text-slate-600">{q.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      <div className="hidden md:grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 w-full">
         {kpis.map((k) => (
           <Card key={k.label} className="bg-white border-border shadow-card rounded-2xl">
             <CardContent className="p-4 sm:p-5 space-y-2">
@@ -243,7 +304,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <section className="space-y-3 w-full">
+      <section className="hidden md:block space-y-3 w-full">
         <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"><span className="w-1.5 h-6 bg-highlight rounded-full" />Acesso Rápido</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 w-full">
           {[

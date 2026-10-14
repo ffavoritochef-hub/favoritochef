@@ -13,16 +13,20 @@ import {
   FileText,
   DollarSign,
   LogOut,
-  Menu as MenuIcon,
   Bell,
   User,
   ChevronRight,
+  ChevronLeft,
   Home,
-  MoreHorizontal,
+  LayoutGrid,
   HardHat,
   Settings,
   UtensilsCrossed,
   Inbox,
+  Plus,
+  CalendarDays,
+  UserPlus,
+  Receipt,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -31,36 +35,71 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
+  SheetDescription,
 } from '@/components/ui/sheet';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 const menuItems = [
-  { title: 'Dashboard', icon: LayoutDashboard, url: '/dashboard' },
-  { title: 'Leads', icon: Inbox, url: '/dashboard/leads' },
-  { title: 'Clientes', icon: Users, url: '/dashboard/clients' },
-  { title: 'Eventos', icon: Calendar, url: '/dashboard/events' },
-  { title: 'Agenda', icon: Calendar, url: '/dashboard/agenda' },
-  { title: 'Funcionários', icon: HardHat, url: '/dashboard/employees' },
-  { title: 'Cardápio', icon: Utensils, url: '/dashboard/menu' },
-  { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets' },
-  { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance' },
-  { title: 'Configurações', icon: Settings, url: '/dashboard/settings' },
+  { title: 'Dashboard', icon: LayoutDashboard, url: '/dashboard', tone: 'bg-blue-50 text-blue-600' },
+  { title: 'Leads', icon: Inbox, url: '/dashboard/leads', tone: 'bg-rose-50 text-rose-600' },
+  { title: 'Clientes', icon: Users, url: '/dashboard/clients', tone: 'bg-sky-50 text-sky-600' },
+  { title: 'Eventos', icon: Calendar, url: '/dashboard/events', tone: 'bg-indigo-50 text-indigo-600' },
+  { title: 'Agenda', icon: CalendarDays, url: '/dashboard/agenda', tone: 'bg-violet-50 text-violet-600' },
+  { title: 'Funcionários', icon: HardHat, url: '/dashboard/employees', tone: 'bg-amber-50 text-amber-600' },
+  { title: 'Cardápio', icon: Utensils, url: '/dashboard/menu', tone: 'bg-orange-50 text-orange-600' },
+  { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets', tone: 'bg-emerald-50 text-emerald-600' },
+  { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance', tone: 'bg-green-50 text-green-600' },
+  { title: 'Configurações', icon: Settings, url: '/dashboard/settings', tone: 'bg-slate-100 text-slate-600' },
 ];
 
 const isRouteActive = (pathname: string, url: string) =>
   url === '/dashboard' ? pathname === url : pathname === url || pathname.startsWith(url + '/');
 
-const bottomNavItems = [
+/** Abas da barra inferior (mobile). O botão "+" central fica entre a 2ª e a 3ª. */
+const tabItems = [
   { title: 'Início', icon: Home, url: '/dashboard' },
   { title: 'Eventos', icon: Calendar, url: '/dashboard/events' },
-  { title: 'Clientes', icon: Users, url: '/dashboard/clients' },
   { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets' },
-  { title: 'Mais', icon: MoreHorizontal, url: '#more' },
 ];
+
+const createActions = [
+  { title: 'Novo evento', desc: 'Agendar um buffet', icon: CalendarDays, url: '/dashboard/events/new', tone: 'bg-indigo-50 text-indigo-600' },
+  { title: 'Novo orçamento', desc: 'Montar proposta', icon: FileText, url: '/dashboard/budgets/new', tone: 'bg-emerald-50 text-emerald-600' },
+  { title: 'Novo cliente', desc: 'Cadastrar contato', icon: UserPlus, url: '/dashboard/clients/new', tone: 'bg-sky-50 text-sky-600' },
+  { title: 'Lançamento', desc: 'Conta a pagar/receber', icon: Receipt, url: '/dashboard/finance/new', tone: 'bg-green-50 text-green-600' },
+];
+
+/** Vibração curtinha ao tocar (Android/TWA); ignorada onde não existe. */
+const haptic = () => {
+  try {
+    navigator.vibrate?.(8);
+  } catch {}
+};
+
+/** Arrastar para baixo fecha o bottom sheet (só quando o conteúdo está no topo). */
+function useSwipeToClose(onClose: () => void) {
+  const startY = useRef<number | null>(null);
+  const [dy, setDy] = useState(0);
+  return {
+    style: dy ? { transform: `translateY(${dy}px)`, transition: 'none' } : undefined,
+    onTouchStart: (e: React.TouchEvent<HTMLElement>) => {
+      startY.current = e.currentTarget.scrollTop <= 0 ? e.touches[0].clientY : null;
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      if (startY.current === null) return;
+      setDy(Math.max(0, e.touches[0].clientY - startY.current));
+    },
+    onTouchEnd: () => {
+      if (dy > 90) onClose();
+      startY.current = null;
+      setDy(0);
+    },
+  };
+}
+
+const SheetHandle = () => <div className="mx-auto h-1.5 w-10 shrink-0 rounded-full bg-slate-200" aria-hidden />;
 
 /** Quantidade de leads "novo"; avisa quando chega um pedido. */
 function useNewLeads(enabled: boolean) {
@@ -184,13 +223,136 @@ function SidebarContent({
   );
 }
 
+/** Menu completo do mobile: grade de "apps" num bottom sheet. */
+function MoreSheet({ open, onOpenChange, newLeads }: { open: boolean; onOpenChange: (v: boolean) => void; newLeads: number }) {
+  const { signOut, user } = useAuth();
+  const { tenant } = useTenant();
+  const pathname = usePathname();
+  const swipe = useSwipeToClose(() => onOpenChange(false));
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        showCloseButton={false}
+        className="md:hidden gap-0 rounded-t-[28px] border-0 pt-3 px-4 bg-white"
+        {...swipe}
+      >
+        <SheetHandle />
+        <SheetHeader className="sr-only">
+          <SheetTitle>Menu</SheetTitle>
+          <SheetDescription>Todas as áreas do sistema</SheetDescription>
+        </SheetHeader>
+
+        {user && (
+          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-primary to-primary-dark p-4 text-white shadow-lg shadow-primary/25">
+            <div className="size-12 rounded-full bg-white/20 flex items-center justify-center text-lg font-bold uppercase shrink-0">
+              {(user.email || '?')[0]}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold truncate">{user.email?.split('@')[0]}</p>
+              <p className="text-xs text-white/75 truncate">{tenant?.name || user.email}</p>
+            </div>
+            <Link
+              href="/dashboard/settings"
+              onClick={() => onOpenChange(false)}
+              className="size-10 rounded-full bg-white/15 flex items-center justify-center shrink-0"
+              aria-label="Configurações"
+            >
+              <Settings className="size-5" />
+            </Link>
+          </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-4 gap-x-2 gap-y-5">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = isRouteActive(pathname, item.url);
+            return (
+              <Link
+                key={item.url}
+                href={item.url}
+                onClick={() => {
+                  haptic();
+                  onOpenChange(false);
+                }}
+                className="flex flex-col items-center gap-1.5 min-w-0"
+              >
+                <span
+                  className={cn(
+                    'relative size-14 rounded-2xl flex items-center justify-center transition',
+                    item.tone,
+                    active && 'ring-2 ring-primary ring-offset-2'
+                  )}
+                >
+                  <Icon className="size-6" />
+                  {item.url === '/dashboard/leads' && <CountBadge n={newLeads} className="absolute -top-1.5 -right-1.5 ring-2 ring-white" />}
+                </span>
+                <span className={cn('text-[11px] leading-tight text-center truncate max-w-full', active ? 'font-bold text-primary' : 'font-medium text-slate-600')}>
+                  {item.title === 'Dashboard' ? 'Início' : item.title === 'Configurações' ? 'Ajustes' : item.title}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => signOut()}
+          className="mt-6 mb-1 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-50 py-3.5 text-sm font-semibold text-destructive"
+        >
+          <LogOut className="size-5" /> Sair da conta
+        </button>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** Ações rápidas do botão "+" central. */
+function CreateSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const swipe = useSwipeToClose(() => onOpenChange(false));
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" showCloseButton={false} className="md:hidden gap-0 rounded-t-[28px] border-0 pt-3 px-4 bg-white" {...swipe}>
+        <SheetHandle />
+        <SheetHeader className="mt-3 px-1">
+          <SheetTitle className="text-lg">Criar novo</SheetTitle>
+          <SheetDescription className="text-sm">O que você quer adicionar agora?</SheetDescription>
+        </SheetHeader>
+        <div className="mt-4 mb-1 grid grid-cols-2 gap-3">
+          {createActions.map((a) => (
+            <Link
+              key={a.url}
+              href={a.url}
+              onClick={() => {
+                haptic();
+                onOpenChange(false);
+              }}
+              className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-card"
+            >
+              <span className={cn('size-11 rounded-xl flex items-center justify-center', a.tone)}>
+                <a.icon className="size-6" />
+              </span>
+              <span>
+                <span className="block text-sm font-bold text-slate-900">{a.title}</span>
+                <span className="block text-xs text-slate-500">{a.desc}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { access, tenant } = useTenant();
   const router = useRouter();
-  const isMobile = useIsMobile();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const newLeads = useNewLeads(!!user && access === 'ativo');
 
   useEffect(() => {
@@ -203,10 +365,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     if (access === 'master') router.replace('/master');
   }, [access, router]);
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   if (loading || access === 'loading' || access === 'master')
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center gap-5 min-h-screen bg-background">
+        <div className="size-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 animate-pulse">
+          <UtensilsCrossed className="size-8 text-white" />
+        </div>
+        <div className="h-1 w-24 overflow-hidden rounded-full bg-primary/10">
+          <div className="loading-bar h-full w-1/2 rounded-full bg-primary" />
+        </div>
       </div>
     );
 
@@ -214,92 +388,169 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (access !== 'ativo') return <BlockedScreen />;
 
+  // seção atual (a mais específica) e se estamos numa subpágina (detalhe/novo/editar)
+  const section = menuItems
+    .filter((m) => isRouteActive(pathname, m.url))
+    .sort((a, b) => b.url.length - a.url.length)[0];
+  const isHome = pathname === '/dashboard';
+  const isSubpage = !!section && pathname !== section.url;
+  const firstName = user.email?.split('@')[0] || '';
+
+  const goBack = () => {
+    haptic();
+    if (window.history.length > 1) router.back();
+    else router.push(section?.url || '/dashboard');
+  };
+
   return (
     <div className="flex min-h-screen w-full bg-background text-slate-900">
       <aside className="hidden md:flex w-64 border-r border-border bg-white flex-col shrink-0 sticky top-0 h-screen">
         <SidebarContent newLeads={newLeads} />
       </aside>
 
-      <main className="flex-1 overflow-y-auto min-w-0 flex flex-col">
-        <header className="md:hidden sticky top-0 z-30 bg-primary text-white px-4 py-3 flex items-center justify-between min-h-[56px] shadow-sm">
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-11 w-11 shrink-0">
-                <MenuIcon className="w-6 h-6" />
-                <span className="sr-only">Abrir menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent
-              side="left"
-              className="w-[85%] data-[side=left]:max-w-[320px] p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] bg-white border-r border-border"
-              showCloseButton={true}
-            >
-              <SheetHeader className="sr-only">
-                <SheetTitle>Menu</SheetTitle>
-              </SheetHeader>
-              <SidebarContent newLeads={newLeads} onNavigate={() => setMobileMenuOpen(false)} />
-            </SheetContent>
-          </Sheet>
+      <main className="flex-1 min-w-0 flex flex-col">
+        {/* Barra superior estilo app */}
+        <header
+          className={cn(
+            'md:hidden sticky top-0 z-30 bg-primary text-white transition-shadow duration-300',
+            scrolled && 'shadow-lg shadow-primary/25'
+          )}
+        >
+          <div className="flex items-center gap-2 h-14 px-2">
+            {isSubpage ? (
+              <button type="button" onClick={goBack} className="size-11 rounded-full flex items-center justify-center active:bg-white/15 shrink-0" aria-label="Voltar">
+                <ChevronLeft className="size-6" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic();
+                  setMoreOpen(true);
+                }}
+                className="ml-1 size-10 rounded-xl bg-white/15 ring-1 ring-white/25 overflow-hidden flex items-center justify-center shrink-0"
+                aria-label="Abrir menu"
+              >
+                {tenant?.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={tenant.logo_url} alt="" className="size-full object-contain bg-white" />
+                ) : (
+                  <UtensilsCrossed className="size-5" />
+                )}
+              </button>
+            )}
 
-          <div className="flex-1 min-w-0 px-2">
-            <h1 className="font-bold text-base truncate">
-              {tenant?.name || 'Agenda Buffet'}
-            </h1>
-            <p className="text-xs text-white/80 truncate">Olá, {user.email?.split('@')[0]}</p>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Button asChild variant="ghost" size="icon" className="relative text-white hover:bg-white/10 h-10 w-10">
-              <Link href="/dashboard/leads" aria-label={newLeads > 0 ? `${newLeads} leads novos` : 'Leads'}>
-                <Bell className="w-5 h-5" />
-                <CountBadge n={newLeads} className="absolute -top-0.5 -right-0.5 ring-2 ring-primary" />
-              </Link>
-            </Button>
+            <div className="flex-1 min-w-0 px-1.5">
+              {isHome ? (
+                <>
+                  <p className="text-[11px] leading-tight text-white/70 truncate">Olá, {firstName} 👋</p>
+                  <p className="font-bold text-[15px] leading-tight truncate">{tenant?.name || 'Agenda Buffet'}</p>
+                </>
+              ) : (
+                <p key={pathname} className="font-bold text-[17px] truncate animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+                  {section?.title || 'Agenda Buffet'}
+                </p>
+              )}
+            </div>
+
+            <Link
+              href="/dashboard/leads"
+              onClick={haptic}
+              className="relative size-11 rounded-full flex items-center justify-center active:bg-white/15 shrink-0"
+              aria-label={newLeads > 0 ? `${newLeads} leads novos` : 'Leads'}
+            >
+              <Bell className={cn('size-[22px] origin-top', newLeads > 0 && 'bell-ring')} />
+              <CountBadge n={newLeads} className="absolute top-0.5 right-0 ring-2 ring-primary" />
+            </Link>
           </div>
         </header>
 
-        <div className={cn(
-          "flex-1 relative w-full",
-          isMobile ? "pb-20 pt-4 px-3 max-w-full" : "p-6 lg:p-8 mx-auto w-full max-w-[1600px]"
-        )}>
-          {children}
+        <div className="flex-1 relative w-full px-3 pt-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 lg:p-8 md:mx-auto md:max-w-[1600px]">
+          <div key={pathname} className="page-enter">
+            {children}
+          </div>
         </div>
 
-        {isMobile && (
-          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-border shadow-[0_-2px_8px_rgba(15,23,42,0.04)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-            <div className="flex items-center justify-around h-16 px-1">
-              {bottomNavItems.map((item) => {
-                const Icon = item.icon;
-                const isMore = item.url === '#more';
-                const isActive = !isMore && isRouteActive(pathname, item.url);
-                const cls = cn(
-                  'flex flex-col items-center justify-center gap-0.5 h-full flex-1 min-w-0 transition-colors',
-                  isActive ? 'text-primary' : 'text-slate-400'
-                );
-                const inner = (
-                  <>
-                    <span className="relative">
-                      <Icon className={cn('w-5 h-5 shrink-0', isActive ? 'text-primary' : '')} />
-                      {isMore && newLeads > 0 && <span className="absolute -top-0.5 -right-1 size-2.5 rounded-full bg-destructive ring-2 ring-white" />}
-                    </span>
-                    <span className={cn('text-[10px] font-semibold truncate max-w-full px-1', isActive ? 'text-primary' : '')}>
-                      {item.title}
-                    </span>
-                  </>
-                );
-                return isMore ? (
-                  <button key={item.title} type="button" className={cls} onClick={() => setMobileMenuOpen(true)} aria-label="Abrir menu completo">
-                    {inner}
-                  </button>
-                ) : (
-                  <Link key={item.title} href={item.url} className={cls} aria-current={isActive ? 'page' : undefined}>
-                    {inner}
-                  </Link>
-                );
-              })}
+        {/* Barra inferior flutuante com botão de criar */}
+        <nav
+          className="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pointer-events-none"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}
+        >
+          <div className="pointer-events-auto relative mx-auto flex h-16 max-w-md items-center rounded-[26px] border border-white/70 bg-white/85 px-1 shadow-[0_10px_40px_-10px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+            {tabItems.slice(0, 2).map((item) => (
+              <TabLink key={item.url} item={item} active={isRouteActive(pathname, item.url)} />
+            ))}
+
+            <div className="flex flex-1 justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic();
+                  setCreateOpen(true);
+                }}
+                className="-mt-9 size-[58px] rounded-[20px] bg-gradient-to-br from-blue-500 to-primary-dark text-white shadow-xl shadow-primary/40 ring-[5px] ring-background flex items-center justify-center"
+                aria-label="Criar novo"
+              >
+                <Plus className={cn('size-7 transition-transform duration-300', createOpen && 'rotate-45')} strokeWidth={2.5} />
+              </button>
             </div>
-          </nav>
-        )}
+
+            {tabItems.slice(2).map((item) => (
+              <TabLink key={item.url} item={item} active={isRouteActive(pathname, item.url)} />
+            ))}
+
+            <button
+              type="button"
+              className="flex flex-1 min-w-0 flex-col items-center justify-center gap-1 h-full"
+              onClick={() => {
+                haptic();
+                setMoreOpen(true);
+              }}
+              aria-label="Abrir menu completo"
+            >
+              <TabIcon icon={LayoutGrid} active={moreOpen} dot={newLeads > 0} />
+              <TabLabel active={moreOpen}>Menu</TabLabel>
+            </button>
+          </div>
+        </nav>
+
+        <MoreSheet open={moreOpen} onOpenChange={setMoreOpen} newLeads={newLeads} />
+        <CreateSheet open={createOpen} onOpenChange={setCreateOpen} />
       </main>
     </div>
+  );
+}
+
+function TabIcon({ icon: Icon, active, dot }: { icon: React.ElementType; active: boolean; dot?: boolean }) {
+  return (
+    <span
+      className={cn(
+        'relative flex h-8 w-14 items-center justify-center rounded-full transition-all duration-300',
+        active ? 'bg-primary/10 text-primary' : 'text-slate-400'
+      )}
+    >
+      <Icon className="size-[22px]" strokeWidth={active ? 2.4 : 2} />
+      {dot && <span className="absolute top-0.5 right-3 size-2.5 rounded-full bg-destructive ring-2 ring-white" />}
+    </span>
+  );
+}
+
+const TabLabel = ({ active, children }: { active: boolean; children: React.ReactNode }) => (
+  <span className={cn('text-[10.5px] leading-none truncate max-w-full', active ? 'font-bold text-primary' : 'font-medium text-slate-500')}>
+    {children}
+  </span>
+);
+
+function TabLink({ item, active }: { item: (typeof tabItems)[number]; active: boolean }) {
+  return (
+    <Link
+      href={item.url}
+      onClick={haptic}
+      className="flex flex-1 min-w-0 flex-col items-center justify-center gap-1 h-full"
+      aria-current={active ? 'page' : undefined}
+    >
+      <TabIcon icon={item.icon} active={active} />
+      <TabLabel active={active}>{item.title}</TabLabel>
+    </Link>
   );
 }

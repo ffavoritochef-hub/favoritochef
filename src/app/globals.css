@@ -61,6 +61,7 @@
 }
 
 :root {
+  color-scheme: only light;
   --primary: #2563EB;
   --primary-dark: #1E40AF;
   --primary-foreground: #FFFFFF;
@@ -223,4 +224,50 @@
 }
 .shadow-modal {
   box-shadow: var(--shadow-modal);
+}
+
+/* ===== Sensação de app no mobile ===== */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes loading-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes bell-ring {
+  0%, 70%, 100% { transform: rotate(0); }
+  74% { transform: rotate(14deg); }
+  80% { transform: rotate(-12deg); }
+  86% { transform: rotate(8deg); }
+  92% { transform: rotate(-4deg); }
+}
+.loading-bar { animation: loading-bar 1s ease-in-out infinite; }
+.bell-ring { animation: bell-ring 2.4s ease-in-out infinite; }
+
+@media (max-width: 767px) {
+  /* sem fill-mode: o transform some ao terminar e não afeta elementos fixed da página */
+  .page-enter { animation: page-enter 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  html { scroll-padding-bottom: calc(7rem + env(safe-area-inset-bottom)); }
+  body { overscroll-behavior-y: none; }
+}
+
+/* feedback de toque (só em telas touch); em base para as utilities do Tailwind prevalecerem */
+@layer base {
+  @media (hover: none) {
+    a, button, [role="button"] {
+      transition-property: transform, background-color, color, box-shadow, opacity;
+      transition-duration: 0.15s;
+    }
+    a:active, button:active, [role="button"]:active {
+      transform: scale(0.96);
+    }
+  }
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter, .bell-ring, .loading-bar { animation: none; }
 }

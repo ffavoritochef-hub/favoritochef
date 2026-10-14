@@ -36,6 +36,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
   themeColor: "#2563EB",
+  // o sistema só tem tema claro: evita que o modo escuro do celular inverta as cores
+  colorScheme: "only light",
 };
 
 export const dynamic = 'force-dynamic';
