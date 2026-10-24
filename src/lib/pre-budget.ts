@@ -120,3 +120,71 @@ export function calcPreBudget(i: PreBudgetInput): PreBudgetResult {
     daysUntil,
   };
 }
+
+// ---------- Preço pelo custo (lista de compras estimada pela IA + equipe) ----------
+
+export interface CostIngredient {
+  name: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface CostInput {
+  guests: number;
+  ingredients: CostIngredient[];
+  disposablesPerPerson: number;
+  waiters: number;
+  waiterRate: number;
+  kitchen: number;
+  kitchenRate: number;
+  extras: number; // transporte, aluguel de material etc.
+  marginPercent: number; // lucro desejado sobre o preço final (0..80)
+}
+
+export interface CostResult {
+  food: number;
+  disposables: number;
+  staff: number;
+  extras: number;
+  totalCost: number;
+  costPerPerson: number;
+  price: number;
+  pricePerPerson: number;
+  profit: number;
+}
+
+/** Preço = custo total ÷ (1 − margem). Ex.: custo 7.000 com margem 30% → 10.000. */
+export function calcCostPrice(i: CostInput): CostResult {
+  const guests = Math.max(0, Math.floor(i.guests || 0));
+  const pos = (n: number) => (Number.isFinite(n) && n > 0 ? n : 0);
+  const food = round(i.ingredients.reduce((s, x) => s + pos(x.quantity) * pos(x.unitPrice), 0));
+  const disposables = round(pos(i.disposablesPerPerson) * guests);
+  const staff = round(pos(i.waiters) * pos(i.waiterRate) + pos(i.kitchen) * pos(i.kitchenRate));
+  const extras = round(pos(i.extras));
+  const totalCost = round(food + disposables + staff + extras);
+  const margin = Math.min(80, Math.max(0, i.marginPercent || 0)) / 100;
+  const pricePerPerson = guests ? nice(totalCost / (1 - margin) / guests) : 0;
+  const price = round(pricePerPerson * guests);
+  return {
+    food,
+    disposables,
+    staff,
+    extras,
+    totalCost,
+    costPerPerson: guests ? round(totalCost / guests) : 0,
+    price,
+    pricePerPerson,
+    profit: round(price - totalCost),
+  };
+}
+
+/** Normaliza nome de insumo para casar com os itens base ("Feijão Preto" ≈ "feijao preto"). */
+export const ingredientKey = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();

@@ -5,16 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowDown, ArrowUp, ChefHat, ChevronLeft, ImagePlus, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/contexts/TenantContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { resizeToJpegBlob } from '@/lib/image-utils';
-import { SHOWCASE_BUCKET, storagePathFromUrl } from '@/lib/showcase';
 import { MENU_LIBRARY, SECTION_ORDER } from '@/lib/menu-library';
-import { getMenu, saveMenu, type MenuData, type MenuItemRow } from '@/lib/menus';
+import { getMenu, removeMenuPhoto, saveMenu, uploadMenuPhoto, type MenuData, type MenuItemRow } from '@/lib/menus';
 
 const textareaCls =
   'w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none';
@@ -76,27 +73,17 @@ export function MenuForm({ menuId }: { menuId?: string }) {
 
   async function upload(file: File | undefined) {
     if (!file || !tenant) return;
-    if (!/^image\/(png|jpe?g|webp|heic|heif)$/.test(file.type)) return toast.error('Use fotos JPG, PNG ou WEBP.');
-    if (file.size > 20 * 1024 * 1024) return toast.error('Foto muito grande (máx. 20 MB).');
     setUploading(true);
     try {
-      const blob = await resizeToJpegBlob(file, 1400);
-      const path = `${tenant.id}/menus/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-      const { error } = await supabase.storage.from(SHOWCASE_BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
-      if (error) throw error;
+      const url = await uploadMenuPhoto(tenant.id, file);
       // descarta upload anterior desta mesma edição (que ainda não foi salvo)
-      if (data.image_url && data.image_url !== originalImage) removeUploaded(data.image_url);
-      set({ image_url: supabase.storage.from(SHOWCASE_BUCKET).getPublicUrl(path).data.publicUrl, image_credit: null });
+      if (data.image_url && data.image_url !== originalImage) removeMenuPhoto(data.image_url);
+      set({ image_url: url, image_credit: null });
     } catch (e) {
       toast.error((e as Error).message || 'Erro ao enviar a foto.');
     } finally {
       setUploading(false);
     }
-  }
-
-  function removeUploaded(url: string) {
-    const p = storagePathFromUrl(url);
-    if (p) supabase.storage.from(SHOWCASE_BUCKET).remove([p]).then(() => {}, () => {});
   }
 
   async function submit(e: React.FormEvent) {
@@ -111,7 +98,7 @@ export function MenuForm({ menuId }: { menuId?: string }) {
     setSaving(true);
     try {
       await saveMenu(menuId ?? null, { ...data, name, price_per_person: p }, filled);
-      if (originalImage && originalImage !== data.image_url) removeUploaded(originalImage);
+      if (originalImage && originalImage !== data.image_url) removeMenuPhoto(originalImage);
       toast.success(menuId ? 'Cardápio atualizado!' : 'Cardápio criado!');
       router.push('/dashboard/menu');
     } catch (err) {

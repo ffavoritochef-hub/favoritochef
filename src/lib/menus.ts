@@ -3,6 +3,8 @@
 
 import { supabase } from '@/lib/supabase';
 import { libraryMenu } from '@/lib/menu-library';
+import { resizeToJpegBlob } from '@/lib/image-utils';
+import { SHOWCASE_BUCKET, storagePathFromUrl } from '@/lib/showcase';
 
 export interface MenuItemRow {
   section: string;
@@ -201,4 +203,32 @@ export async function importLibraryMenu(key: string): Promise<string> {
     },
     lib.items
   );
+}
+
+/** Troca só a foto do cardápio (null remove). */
+export async function setMenuPhoto(id: string, image_url: string | null, image_credit: string | null) {
+  const { error } = await supabase.from('menu_templates').update({ image_url, image_credit }).eq('id', id);
+  if (isMissingColumn(error)) {
+    markPending();
+    throw new Error('Rode a atualização do banco 0009 para salvar fotos.');
+  }
+  if (error) throw error;
+}
+
+/** Envia a foto do cardápio para o storage da vitrine (pasta do buffet) e devolve a URL pública. */
+export async function uploadMenuPhoto(tenantId: string, file: File): Promise<string> {
+  if (!/^image\/(png|jpe?g|webp|heic|heif)$/.test(file.type)) throw new Error('Use fotos JPG, PNG ou WEBP.');
+  if (file.size > 20 * 1024 * 1024) throw new Error('Foto muito grande (máx. 20 MB).');
+  const blob = await resizeToJpegBlob(file, 1400);
+  const path = `${tenantId}/menus/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await supabase.storage.from(SHOWCASE_BUCKET).upload(path, blob, { contentType: 'image/jpeg' });
+  if (error) throw error;
+  return supabase.storage.from(SHOWCASE_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+/** Apaga do storage uma foto enviada pelo buffet (fotos prontas de /cardapios são ignoradas). */
+export async function removeMenuPhoto(url: string | null | undefined) {
+  if (!url) return;
+  const p = storagePathFromUrl(url);
+  if (p) await supabase.storage.from(SHOWCASE_BUCKET).remove([p]).then(() => {}, () => {});
 }

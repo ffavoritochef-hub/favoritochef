@@ -6,9 +6,12 @@ import { toast } from 'sonner';
 import {
   Ban,
   BookOpen,
+  Camera,
   Check,
   ChefHat,
   Copy,
+  ImagePlus,
+  ListChecks,
   Loader2,
   Package,
   Pencil,
@@ -19,6 +22,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useTenant } from '@/contexts/TenantContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,7 +36,10 @@ import {
   importLibraryMenu,
   listMenus,
   migrationPending,
+  removeMenuPhoto,
   setMenuActive,
+  setMenuPhoto,
+  uploadMenuPhoto,
   type MenuRecord,
 } from '@/lib/menus';
 
@@ -81,6 +88,7 @@ export default function MenuPage() {
   const [libPreview, setLibPreview] = useState<LibraryMenu | null>(null);
   const [itemDialog, setItemDialog] = useState<{ open: boolean; item: BaseItem | null }>({ open: false, item: null });
   const [catFilter, setCatFilter] = useState<string>('');
+  const [photoFor, setPhotoFor] = useState<MenuRecord | null>(null);
 
   useEffect(() => {
     fetchAll();
@@ -276,59 +284,72 @@ export default function MenuPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {visibleMenus.map((m) => (
-              <article key={m.id} className={`bg-white border border-border shadow-card rounded-2xl overflow-hidden flex flex-col ${m.is_active ? '' : 'opacity-70'}`}>
-                <div className="relative aspect-[16/9] bg-slate-100">
+              <article key={m.id} className="bg-white border border-border shadow-card rounded-2xl overflow-hidden flex flex-col">
+                <div className={`relative aspect-[16/9] bg-slate-100 ${m.is_active ? '' : 'grayscale opacity-70'}`}>
                   {m.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={m.image_url} alt={m.name} className="absolute inset-0 size-full object-cover" loading="lazy" />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-slate-300"><ChefHat className="size-12" /></div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-slate-400 text-sm">
+                      <ChefHat className="size-10" /> Sem foto
+                    </div>
                   )}
-                  {!m.is_active && <span className="absolute top-3 left-3 text-[11px] font-bold uppercase bg-slate-900/80 text-white rounded-full px-3 py-1">Desativado</span>}
                   {m.price_per_person != null && (
-                    <span className="absolute bottom-3 right-3 text-sm font-bold bg-white/95 text-slate-900 rounded-full px-3 py-1 shadow">
+                    <span className="absolute bottom-3 left-3 text-sm font-bold bg-white/95 text-slate-900 rounded-full px-3 py-1 shadow">
                       {formatBRL(m.price_per_person)}<span className="text-xs font-medium text-slate-500">/pessoa</span>
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setPhotoFor(m)}
+                    className="absolute top-3 right-3 inline-flex items-center gap-1.5 h-10 px-3 rounded-full bg-white/95 text-slate-800 text-sm font-semibold shadow hover:bg-white"
+                  >
+                    <Camera className="size-4" /> {m.image_url ? 'Trocar foto' : 'Pôr foto'}
+                  </button>
                 </div>
                 <div className="p-4 sm:p-5 flex-1 flex flex-col gap-3">
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-lg leading-tight">{m.name}</h3>
-                    {m.description && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{m.description}</p>}
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold text-slate-900 text-lg leading-tight">{m.name}</h3>
+                      {m.description && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{m.description}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={m.is_active}
+                      onClick={() => setPending({ kind: 'menu-toggle', menu: m })}
+                      className={`shrink-0 inline-flex items-center gap-2 h-9 pl-1 pr-3 rounded-full border text-xs font-bold ${
+                        m.is_active ? 'border-success/40 bg-success/10 text-success' : 'border-slate-200 bg-slate-100 text-slate-500'
+                      }`}
+                      title={m.is_active ? 'Clique para inativar' : 'Clique para ativar'}
+                    >
+                      <span className={`relative h-6 w-10 rounded-full transition ${m.is_active ? 'bg-success' : 'bg-slate-300'}`}>
+                        <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${m.is_active ? 'left-[18px]' : 'left-0.5'}`} />
+                      </span>
+                      {m.is_active ? 'Ativo' : 'Inativo'}
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {m.items.slice(0, 6).map((i, idx) => (
                       <span key={idx} className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-slate-700 font-medium">{i.name}</span>
                     ))}
                     {m.items.length > 6 && <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">+{m.items.length - 6}</span>}
+                    {m.items.length === 0 && <span className="text-xs text-slate-400">Nenhum item</span>}
                   </div>
-                  <div className="mt-auto grid grid-cols-4 gap-1.5 pt-3 border-t border-slate-100">
-                    <Button asChild variant="outline" className="h-11 col-span-2 rounded-xl font-semibold border-slate-200">
-                      <Link href={`/dashboard/menu/${m.id}/edit`}><Pencil className="size-4" /> Editar</Link>
+                  <div className="mt-auto grid grid-cols-3 gap-1.5 pt-3 border-t border-slate-100">
+                    <Button asChild variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 px-2 text-xs sm:text-sm">
+                      <Link href={`/dashboard/menu/${m.id}/edit`}><ListChecks className="size-4" /> Editar itens</Link>
                     </Button>
-                    <Button variant="outline" className="h-11 rounded-xl border-slate-200" title="Duplicar" aria-label="Duplicar" disabled={busy === m.id} onClick={() => duplicate(m)}>
-                      {busy === m.id ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />}
+                    <Button variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 px-2 text-xs sm:text-sm" disabled={busy === m.id} onClick={() => duplicate(m)}>
+                      {busy === m.id ? <Loader2 className="size-4 animate-spin" /> : <Copy className="size-4" />} Duplicar
                     </Button>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <Button
-                        variant="outline"
-                        className="h-11 px-0 rounded-xl border-slate-200"
-                        title={m.is_active ? 'Desativar' : 'Ativar'}
-                        aria-label={m.is_active ? 'Desativar' : 'Ativar'}
-                        onClick={() => setPending({ kind: 'menu-toggle', menu: m })}
-                      >
-                        {m.is_active ? <Ban className="size-4 text-slate-500" /> : <Power className="size-4 text-success" />}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-11 px-0 rounded-xl border-slate-200 hover:text-destructive"
-                        title="Excluir"
-                        aria-label="Excluir"
-                        onClick={() => setPending({ kind: 'menu-delete', menu: m })}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-xl font-semibold border-slate-200 px-2 text-xs sm:text-sm hover:text-destructive hover:border-destructive/30"
+                      onClick={() => setPending({ kind: 'menu-delete', menu: m })}
+                    >
+                      <Trash2 className="size-4" /> Excluir
+                    </Button>
                   </div>
                 </div>
               </article>
@@ -458,6 +479,12 @@ export default function MenuPage() {
         </DialogContent>
       </Dialog>
 
+      <MenuPhotoDialog
+        menu={photoFor}
+        onClose={() => setPhotoFor(null)}
+        onSaved={(id, url, credit) => setMenus((list) => list.map((x) => (x.id === id ? { ...x, image_url: url, image_credit: credit } : x)))}
+      />
+
       <BaseItemDialog
         key={itemDialog.open ? itemDialog.item?.id ?? 'new' : 'closed'}
         open={itemDialog.open}
@@ -467,6 +494,92 @@ export default function MenuPage() {
         onSaved={fetchAll}
       />
     </div>
+  );
+}
+
+function MenuPhotoDialog({
+  menu,
+  onClose,
+  onSaved,
+}: {
+  menu: MenuRecord | null;
+  onClose: () => void;
+  onSaved: (id: string, url: string | null, credit: string | null) => void;
+}) {
+  const { tenant } = useTenant();
+  const [busy, setBusy] = useState(false);
+
+  async function apply(url: string | null, credit: string | null) {
+    if (!menu) return;
+    setBusy(true);
+    try {
+      await setMenuPhoto(menu.id, url, credit);
+      if (menu.image_url && menu.image_url !== url) removeMenuPhoto(menu.image_url);
+      onSaved(menu.id, url, credit);
+      toast.success(url ? 'Foto atualizada.' : 'Foto removida.');
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message || 'Erro ao salvar a foto.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function upload(file: File | undefined) {
+    if (!file || !tenant || !menu) return;
+    setBusy(true);
+    let url: string | null = null;
+    try {
+      url = await uploadMenuPhoto(tenant.id, file);
+    } catch (e) {
+      toast.error((e as Error).message || 'Erro ao enviar a foto.');
+      setBusy(false);
+      return;
+    }
+    await apply(url, null);
+  }
+
+  return (
+    <Dialog open={!!menu} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="max-w-md !rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Foto do cardápio</DialogTitle>
+          <DialogDescription>{menu?.name}</DialogDescription>
+        </DialogHeader>
+        {menu?.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={menu.image_url} alt="" className="w-full aspect-[16/9] object-cover rounded-xl" />
+        )}
+        <label className={`flex items-center justify-center gap-2 h-12 rounded-xl bg-primary text-white font-semibold cursor-pointer hover:bg-primary-dark ${busy ? 'opacity-60 pointer-events-none' : ''}`}>
+          {busy ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
+          {busy ? 'Salvando...' : 'Enviar foto do celular/computador'}
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
+        </label>
+        <div>
+          <p className="text-sm font-semibold text-slate-700 mb-2">Ou use uma foto pronta</p>
+          <div className="grid grid-cols-4 gap-2">
+            {MENU_LIBRARY.map((l) => (
+              <button
+                key={l.key}
+                type="button"
+                disabled={busy}
+                title={l.name}
+                onClick={() => apply(l.image, l.credit)}
+                className={`aspect-square rounded-lg overflow-hidden border-2 ${menu?.image_url === l.image ? 'border-primary' : 'border-transparent hover:border-slate-300'}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={l.image} alt={l.name} className="size-full object-cover" />
+              </button>
+            ))}
+          </div>
+        </div>
+        {menu?.image_url && (
+          <Button variant="ghost" className="text-destructive hover:text-destructive" disabled={busy} onClick={() => apply(null, null)}>
+            <Trash2 className="size-4" /> Remover foto
+          </Button>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

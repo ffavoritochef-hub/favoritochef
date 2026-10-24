@@ -12,6 +12,7 @@ import { authFetch } from '@/lib/api-client';
 import { formatBRL } from '@/lib/buffet-rules';
 import { MENU_LIBRARY, libraryMenu } from '@/lib/menu-library';
 import { listMenus, type MenuRecord } from '@/lib/menus';
+import { CostEstimator } from '@/components/pre-budget/CostEstimator';
 import {
   DRINKS,
   GENERIC_RANGE,
@@ -55,12 +56,12 @@ export default function PreBudgetPage() {
         : own
           ? 'Baseado no preço por pessoa que você cadastrou neste cardápio.'
           : 'Este cardápio não tem preço nem referência: usamos uma faixa geral. Cadastre o preço por pessoa no cardápio para uma sugestão melhor.';
-      return { name: m.name, base, own, note, items: m.items.map((i) => i.name) };
+      return { name: m.name, base, own, note, items: m.items.map((i) => i.name), full: m.items.map(({ name, quantity }) => ({ name, quantity })) };
     }
     if (menuRef.startsWith('lib:')) {
       const lib = libraryMenu(menuRef.slice(4));
       if (!lib) return null;
-      return { name: lib.name, base: lib.priceRange, own: null, note: 'Faixa de mercado do cardápio pronto.', items: lib.items.map((i) => i.name) };
+      return { name: lib.name, base: lib.priceRange, own: null, note: 'Faixa de mercado do cardápio pronto.', items: lib.items.map((i) => i.name), full: lib.items.map(({ name, quantity }) => ({ name, quantity })) };
     }
     return null;
   }, [menuRef, menus]);
@@ -278,6 +279,15 @@ export default function PreBudgetPage() {
                   )}
                 </CardContent>
               </Card>
+
+              <CostEstimator
+                key={menuRef}
+                menuName={choice.name}
+                items={choice.full}
+                guests={nGuests}
+                staff={result.staff}
+                marketPerPerson={result.perPerson.suggested}
+              />
 
               <Card className="shadow-card border-border bg-white">
                 <CardContent className="py-4 text-xs text-slate-500 space-y-2">
