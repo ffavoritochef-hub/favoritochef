@@ -27,6 +27,7 @@ import {
   CalendarDays,
   UserPlus,
   Receipt,
+  Store,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -50,6 +51,7 @@ const menuItems = [
   { title: 'Funcionários', icon: HardHat, url: '/dashboard/employees', tone: 'bg-amber-50 text-amber-600' },
   { title: 'Cardápio', icon: Utensils, url: '/dashboard/menu', tone: 'bg-orange-50 text-orange-600' },
   { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets', tone: 'bg-emerald-50 text-emerald-600' },
+  { title: 'Vitrine', icon: Store, url: '/dashboard/vitrine', tone: 'bg-fuchsia-50 text-fuchsia-600' },
   { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance', tone: 'bg-green-50 text-green-600' },
   { title: 'Configurações', icon: Settings, url: '/dashboard/settings', tone: 'bg-slate-100 text-slate-600' },
 ];
