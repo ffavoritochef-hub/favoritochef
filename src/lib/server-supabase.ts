@@ -41,3 +41,29 @@ export function publicBaseUrl(request: Request): string {
   const proto = request.headers.get('x-forwarded-proto') || (host?.startsWith('localhost') ? 'http' : 'https');
   return host ? `${proto}://${host}` : new URL(request.url).origin;
 }
+
+export interface UserTenant {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  status: 'pendente' | 'ativo' | 'suspenso' | 'recusado';
+  valid_until: string | null;
+}
+
+/**
+ * Buffet do usuário logado (dono ou usuário vinculado), usando o cliente que age como ele.
+ * Com `perm`, devolve 'forbidden' se o usuário não tiver acesso àquela área.
+ */
+export async function userTenant(db: SupabaseClient, perm?: string): Promise<UserTenant | 'forbidden' | null> {
+  const { data: tid } = await db.rpc('current_tenant_id');
+  if (!tid) return null;
+  const { data } = await db.from('tenants').select('id, name, city, state, status, valid_until').eq('id', tid).maybeSingle();
+  if (!data) return null;
+  if (perm) {
+    const { data: ok, error } = await db.rpc('has_permission', { perm });
+    // sem a migração 0010 a função não existe: só o dono acessa, então libera
+    if (!error && !ok) return 'forbidden';
+  }
+  return data as UserTenant;
+}

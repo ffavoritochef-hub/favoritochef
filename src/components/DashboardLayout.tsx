@@ -29,6 +29,8 @@ import {
   Receipt,
   Store,
   Calculator,
+  UserCog,
+  Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -42,38 +44,48 @@ import {
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { Permission, ROLE_LABELS, canRoute } from '@/lib/permissions';
 
-const menuItems = [
+type Perm = Permission | 'usuarios';
+
+const menuItems: { title: string; icon: React.ElementType; url: string; tone: string; perm?: Perm }[] = [
   { title: 'Dashboard', icon: LayoutDashboard, url: '/dashboard', tone: 'bg-blue-50 text-blue-600' },
-  { title: 'Leads', icon: Inbox, url: '/dashboard/leads', tone: 'bg-rose-50 text-rose-600' },
-  { title: 'Clientes', icon: Users, url: '/dashboard/clients', tone: 'bg-sky-50 text-sky-600' },
-  { title: 'Eventos', icon: Calendar, url: '/dashboard/events', tone: 'bg-indigo-50 text-indigo-600' },
-  { title: 'Agenda', icon: CalendarDays, url: '/dashboard/agenda', tone: 'bg-violet-50 text-violet-600' },
-  { title: 'Funcionários', icon: HardHat, url: '/dashboard/employees', tone: 'bg-amber-50 text-amber-600' },
-  { title: 'Cardápios', icon: Utensils, url: '/dashboard/menu', tone: 'bg-orange-50 text-orange-600' },
-  { title: 'Pré-orçamento', icon: Calculator, url: '/dashboard/pre-orcamento', tone: 'bg-teal-50 text-teal-600' },
-  { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets', tone: 'bg-emerald-50 text-emerald-600' },
-  { title: 'Vitrine', icon: Store, url: '/dashboard/vitrine', tone: 'bg-fuchsia-50 text-fuchsia-600' },
-  { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance', tone: 'bg-green-50 text-green-600' },
-  { title: 'Configurações', icon: Settings, url: '/dashboard/settings', tone: 'bg-slate-100 text-slate-600' },
+  { title: 'Leads', icon: Inbox, url: '/dashboard/leads', tone: 'bg-rose-50 text-rose-600', perm: 'leads' },
+  { title: 'Clientes', icon: Users, url: '/dashboard/clients', tone: 'bg-sky-50 text-sky-600', perm: 'clientes' },
+  { title: 'Eventos', icon: Calendar, url: '/dashboard/events', tone: 'bg-indigo-50 text-indigo-600', perm: 'eventos' },
+  { title: 'Agenda', icon: CalendarDays, url: '/dashboard/agenda', tone: 'bg-violet-50 text-violet-600', perm: 'agenda' },
+  { title: 'Funcionários', icon: HardHat, url: '/dashboard/employees', tone: 'bg-amber-50 text-amber-600', perm: 'funcionarios' },
+  { title: 'Cardápios', icon: Utensils, url: '/dashboard/menu', tone: 'bg-orange-50 text-orange-600', perm: 'cardapios' },
+  { title: 'Pré-orçamento', icon: Calculator, url: '/dashboard/pre-orcamento', tone: 'bg-teal-50 text-teal-600', perm: 'pre_orcamento' },
+  { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets', tone: 'bg-emerald-50 text-emerald-600', perm: 'orcamentos' },
+  { title: 'Vitrine', icon: Store, url: '/dashboard/vitrine', tone: 'bg-fuchsia-50 text-fuchsia-600', perm: 'vitrine' },
+  { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance', tone: 'bg-green-50 text-green-600', perm: 'financeiro' },
+  { title: 'Usuários', icon: UserCog, url: '/dashboard/usuarios', tone: 'bg-cyan-50 text-cyan-600', perm: 'usuarios' },
+  { title: 'Configurações', icon: Settings, url: '/dashboard/settings', tone: 'bg-slate-100 text-slate-600', perm: 'configuracoes' },
 ];
+
+/** Itens que o usuário logado pode ver. */
+function useAllowed<T extends { perm?: Perm }>(items: T[]): T[] {
+  const { can } = useTenant();
+  return items.filter((i) => !i.perm || can(i.perm));
+}
 
 const isRouteActive = (pathname: string, url: string) =>
   url === '/dashboard' ? pathname === url : pathname === url || pathname.startsWith(url + '/');
 
 /** Abas da barra inferior (mobile). O botão "+" central fica entre a 2ª e a 3ª. */
-const tabItems = [
+const tabItems: { title: string; icon: React.ElementType; url: string; perm?: Perm }[] = [
   { title: 'Início', icon: Home, url: '/dashboard' },
-  { title: 'Eventos', icon: Calendar, url: '/dashboard/events' },
-  { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets' },
+  { title: 'Eventos', icon: Calendar, url: '/dashboard/events', perm: 'eventos' },
+  { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets', perm: 'orcamentos' },
 ];
 
-const createActions = [
-  { title: 'Novo evento', desc: 'Agendar um buffet', icon: CalendarDays, url: '/dashboard/events/new', tone: 'bg-indigo-50 text-indigo-600' },
-  { title: 'Novo orçamento', desc: 'Montar proposta', icon: FileText, url: '/dashboard/budgets/new', tone: 'bg-emerald-50 text-emerald-600' },
-  { title: 'Pré-orçamento', desc: 'Quanto cobrar', icon: Calculator, url: '/dashboard/pre-orcamento', tone: 'bg-teal-50 text-teal-600' },
-  { title: 'Novo cliente', desc: 'Cadastrar contato', icon: UserPlus, url: '/dashboard/clients/new', tone: 'bg-sky-50 text-sky-600' },
-  { title: 'Lançamento', desc: 'Conta a pagar/receber', icon: Receipt, url: '/dashboard/finance/new', tone: 'bg-green-50 text-green-600' },
+const createActions: { title: string; desc: string; icon: React.ElementType; url: string; tone: string; perm: Perm }[] = [
+  { title: 'Novo evento', desc: 'Agendar um buffet', icon: CalendarDays, url: '/dashboard/events/new', tone: 'bg-indigo-50 text-indigo-600', perm: 'eventos' },
+  { title: 'Novo orçamento', desc: 'Montar proposta', icon: FileText, url: '/dashboard/budgets/new', tone: 'bg-emerald-50 text-emerald-600', perm: 'orcamentos' },
+  { title: 'Pré-orçamento', desc: 'Quanto cobrar', icon: Calculator, url: '/dashboard/pre-orcamento', tone: 'bg-teal-50 text-teal-600', perm: 'pre_orcamento' },
+  { title: 'Novo cliente', desc: 'Cadastrar contato', icon: UserPlus, url: '/dashboard/clients/new', tone: 'bg-sky-50 text-sky-600', perm: 'clientes' },
+  { title: 'Lançamento', desc: 'Conta a pagar/receber', icon: Receipt, url: '/dashboard/finance/new', tone: 'bg-green-50 text-green-600', perm: 'financeiro' },
 ];
 
 /** Vibração curtinha ao tocar (Android/TWA); ignorada onde não existe. */
@@ -156,8 +168,9 @@ function SidebarContent({
   newLeads?: number;
 }) {
   const { signOut, user } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, role } = useTenant();
   const pathname = usePathname();
+  const items = useAllowed(menuItems);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -178,7 +191,7 @@ function SidebarContent({
       </div>
 
       <nav className="flex-1 p-3 sm:p-4 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
           const isActive = isRouteActive(pathname, item.url);
 
@@ -212,6 +225,7 @@ function SidebarContent({
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm text-slate-900 truncate">{user.email?.split('@')[0]}</p>
               <p className="text-xs text-slate-500 truncate">{user.email}</p>
+              <p className="text-[11px] font-semibold text-primary">{ROLE_LABELS[role]}</p>
             </div>
           </div>
         )}
@@ -231,9 +245,10 @@ function SidebarContent({
 /** Menu completo do mobile: grade de "apps" num bottom sheet. */
 function MoreSheet({ open, onOpenChange, newLeads }: { open: boolean; onOpenChange: (v: boolean) => void; newLeads: number }) {
   const { signOut, user } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, can, role } = useTenant();
   const pathname = usePathname();
   const swipe = useSwipeToClose(() => onOpenChange(false));
+  const items = useAllowed(menuItems);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -256,8 +271,9 @@ function MoreSheet({ open, onOpenChange, newLeads }: { open: boolean; onOpenChan
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-semibold truncate">{user.email?.split('@')[0]}</p>
-              <p className="text-xs text-white/75 truncate">{tenant?.name || user.email}</p>
+              <p className="text-xs text-white/75 truncate">{tenant?.name || user.email} · {ROLE_LABELS[role]}</p>
             </div>
+            {can('configuracoes') && (
             <Link
               href="/dashboard/settings"
               onClick={() => onOpenChange(false)}
@@ -266,11 +282,12 @@ function MoreSheet({ open, onOpenChange, newLeads }: { open: boolean; onOpenChan
             >
               <Settings className="size-5" />
             </Link>
+            )}
           </div>
         )}
 
         <div className="mt-5 grid grid-cols-4 gap-x-2 gap-y-5">
-          {menuItems.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const active = isRouteActive(pathname, item.url);
             return (
@@ -316,6 +333,7 @@ function MoreSheet({ open, onOpenChange, newLeads }: { open: boolean; onOpenChan
 /** Ações rápidas do botão "+" central. */
 function CreateSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const swipe = useSwipeToClose(() => onOpenChange(false));
+  const actions = useAllowed(createActions);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" showCloseButton={false} className="md:hidden gap-0 rounded-t-[28px] border-0 pt-3 px-4 bg-white" {...swipe}>
@@ -325,7 +343,7 @@ function CreateSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
           <SheetDescription className="text-sm">O que você quer adicionar agora?</SheetDescription>
         </SheetHeader>
         <div className="mt-4 mb-1 grid grid-cols-2 gap-3">
-          {createActions.map((a) => (
+          {actions.map((a) => (
             <Link
               key={a.url}
               href={a.url}
@@ -352,13 +370,15 @@ function CreateSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const { access, tenant } = useTenant();
+  const { access, tenant, role, permissions, can } = useTenant();
   const router = useRouter();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const newLeads = useNewLeads(!!user && access === 'ativo');
+  const newLeads = useNewLeads(!!user && access === 'ativo' && can('leads'));
+  const tabs = useAllowed(tabItems);
+  const canCreate = useAllowed(createActions).length > 0;
 
   useEffect(() => {
     if (!loading && !user) {
@@ -398,6 +418,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     .filter((m) => isRouteActive(pathname, m.url))
     .sort((a, b) => b.url.length - a.url.length)[0];
   const isHome = pathname === '/dashboard';
+  const allowed = canRoute(role, permissions, pathname);
   const isSubpage = !!section && pathname !== section.url;
   const firstName = user.email?.split('@')[0] || '';
 
@@ -458,6 +479,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
+            {can('leads') && (
             <Link
               href="/dashboard/leads"
               onClick={haptic}
@@ -467,12 +489,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Bell className={cn('size-[22px] origin-top', newLeads > 0 && 'bell-ring')} />
               <CountBadge n={newLeads} className="absolute top-0.5 right-0 ring-2 ring-primary" />
             </Link>
+            )}
           </div>
         </header>
 
         <div className="flex-1 relative w-full px-3 pt-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 lg:p-8 md:mx-auto md:max-w-[1600px]">
           <div key={pathname} className="page-enter">
-            {children}
+            {allowed ? children : <NoPermission />}
           </div>
         </div>
 
@@ -482,10 +505,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}
         >
           <div className="pointer-events-auto relative mx-auto flex h-16 max-w-md items-center rounded-[26px] border border-white/70 bg-white/85 px-1 shadow-[0_10px_40px_-10px_rgba(15,23,42,0.35)] backdrop-blur-xl">
-            {tabItems.slice(0, 2).map((item) => (
+            {tabs.slice(0, 2).map((item) => (
               <TabLink key={item.url} item={item} active={isRouteActive(pathname, item.url)} />
             ))}
 
+            {canCreate && (
             <div className="flex flex-1 justify-center">
               <button
                 type="button"
@@ -499,8 +523,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <Plus className={cn('size-7 transition-transform duration-300', createOpen && 'rotate-45')} strokeWidth={2.5} />
               </button>
             </div>
+            )}
 
-            {tabItems.slice(2).map((item) => (
+            {tabs.slice(2).map((item) => (
               <TabLink key={item.url} item={item} active={isRouteActive(pathname, item.url)} />
             ))}
 
@@ -522,6 +547,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <MoreSheet open={moreOpen} onOpenChange={setMoreOpen} newLeads={newLeads} />
         <CreateSheet open={createOpen} onOpenChange={setCreateOpen} />
       </main>
+    </div>
+  );
+}
+
+function NoPermission() {
+  return (
+    <div className="max-w-md mx-auto mt-10 bg-white rounded-2xl border border-border shadow-card p-8 text-center space-y-4">
+      <div className="size-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+        <Lock className="size-7 text-primary" />
+      </div>
+      <h1 className="text-xl font-bold text-slate-900">Sem acesso a esta área</h1>
+      <p className="text-sm text-slate-500">Peça ao administrador do buffet para liberar esta área no seu usuário.</p>
+      <Button asChild className="h-11 rounded-xl">
+        <Link href="/dashboard">Voltar ao início</Link>
+      </Button>
     </div>
   );
 }

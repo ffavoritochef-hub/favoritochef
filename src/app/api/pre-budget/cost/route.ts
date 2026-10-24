@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server-supabase';
+import { requireUser, userTenant } from '@/lib/server-supabase';
 import { computeAccess } from '@/lib/tenant';
 import { rateLimited } from '@/lib/rate-limit';
 import { GeminiError, geminiJson } from '@/lib/gemini';
@@ -41,11 +41,8 @@ export async function POST(req: Request) {
   const auth = await requireUser(req);
   if (!auth) return NextResponse.json({ error: 'Sessão expirada ou inválida. Saia e entre novamente.' }, { status: 401 });
 
-  const { data: tenant } = await auth.db
-    .from('tenants')
-    .select('id, name, city, state, status, valid_until')
-    .eq('owner_id', auth.user.id)
-    .maybeSingle();
+  const tenant = await userTenant(auth.db, 'pre_orcamento');
+  if (tenant === 'forbidden') return NextResponse.json({ error: 'Você não tem acesso a esta área.' }, { status: 403 });
   if (!tenant || computeAccess(tenant, false) !== 'ativo') {
     return NextResponse.json({ error: 'Buffet sem acesso ativo.' }, { status: 403 });
   }

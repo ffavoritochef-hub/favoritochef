@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { LogOut, Search, ShieldCheck, Check, Ban, X, RefreshCw, CalendarClock, Phone, MapPin, UtensilsCrossed } from 'lucide-react';
+import { LogOut, Search, ShieldCheck, Check, Ban, X, RefreshCw, CalendarClock, Phone, MapPin, UtensilsCrossed, Users, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
@@ -13,10 +13,22 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DURATION_PRESETS, Tenant, addDaysFrom, computeAccess, daysLeft, endOfDayISO } from '@/lib/tenant';
 import { cn } from '@/lib/utils';
+import { TeamManager } from '@/components/team/TeamManager';
+import { ROLE_LABELS } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
-type Tab = 'pendente' | 'ativo' | 'suspenso' | 'todos';
+type Tab = 'pendente' | 'ativo' | 'suspenso' | 'todos' | 'usuarios';
+
+interface MemberLite {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  email: string;
+  name: string | null;
+  role: 'admin' | 'usuario';
+  active: boolean;
+}
 type Action = 'approve' | 'renew' | 'suspend' | 'refuse' | 'reactivate' | 'deadline';
 
 const TITLES: Record<Action, string> = {
@@ -53,6 +65,8 @@ export default function MasterPage() {
   const [customDate, setCustomDate] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [members, setMembers] = useState<MemberLite[]>([]);
+  const [teamOf, setTeamOf] = useState<Tenant | null>(null);
 
   useEffect(() => {
     if (authLoading || tenantLoading) return;
@@ -62,9 +76,13 @@ export default function MasterPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('tenants').select('*').order('created_at', { ascending: false });
+    const [{ data, error }, mem] = await Promise.all([
+      supabase.from('tenants').select('*').order('created_at', { ascending: false }),
+      supabase.from('tenant_members').select('id, tenant_id, user_id, email, name, role, active').order('created_at'),
+    ]);
     if (error) toast.error(error.message);
     setRows((data as Tenant[]) ?? []);
+    setMembers((mem.data as MemberLite[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -75,7 +93,21 @@ export default function MasterPage() {
     ativo: rows.filter((r) => r.status === 'ativo').length,
     suspenso: rows.filter((r) => r.status === 'suspenso' || r.status === 'recusado').length,
     todos: rows.length,
-  }), [rows]);
+    usuarios: members.length,
+  }), [rows, members]);
+
+  const byTenant = useMemo(() => Object.fromEntries(rows.map((r) => [r.id, r])), [rows]);
+  const memberCount = useMemo(() => {
+    const m: Record<string, number> = {};
+    members.forEach((x) => (m[x.tenant_id] = (m[x.tenant_id] || 0) + 1));
+    return m;
+  }, [members]);
+  const filteredMembers = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return members.filter((m) =>
+      !term || [m.name, m.email, byTenant[m.tenant_id]?.name].some((v) => (v || '').toLowerCase().includes(term))
+    );
+  }, [members, q, byTenant]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -163,8 +195,8 @@ export default function MasterPage() {
       </header>
 
       <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {([['pendente', 'Pendentes'], ['ativo', 'Ativos'], ['suspenso', 'Suspensos/Recusados'], ['todos', 'Todos']] as [Tab, string][]).map(([k, label]) => (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {([['pendente', 'Pendentes'], ['ativo', 'Ativos'], ['suspenso', 'Suspensos/Recusados'], ['todos', 'Todos os buffets'], ['usuarios', 'Usuários']] as [Tab, string][]).map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)}
               className={cn('text-left rounded-xl border p-3 sm:p-4 bg-white transition min-h-[72px]', tab === k ? 'border-primary ring-2 ring-primary/20' : 'border-border')}>
               <p className="text-2xl font-bold">{counts[k]}</p>
@@ -175,11 +207,38 @@ export default function MasterPage() {
 
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome, responsável, e-mail ou cidade" className="pl-10 h-12 rounded-xl bg-white" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'usuarios' ? 'Buscar usuário por nome, e-mail ou buffet' : 'Buscar por nome, responsável, e-mail ou cidade'} className="pl-10 h-12 rounded-xl bg-white" />
         </div>
 
         {loading ? (
           <p className="text-center text-slate-500 py-10">Carregando...</p>
+        ) : tab === 'usuarios' ? (
+          filteredMembers.length === 0 ? (
+            <div className="text-center py-14 bg-white rounded-xl border border-border text-slate-500">Nenhum usuário encontrado.</div>
+          ) : (
+            <div className="bg-white rounded-xl border border-border divide-y divide-border">
+              {filteredMembers.map((m) => {
+                const t = byTenant[m.tenant_id];
+                const isOwner = t?.owner_id === m.user_id;
+                return (
+                  <button key={m.id} type="button" onClick={() => t && setTeamOf(t)} className="w-full flex items-center gap-3 p-3 sm:p-4 text-left hover:bg-slate-50 min-h-[64px]">
+                    <div className={cn('size-10 rounded-full flex items-center justify-center shrink-0 font-bold uppercase', m.active ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500')}>
+                      {(m.name || m.email)[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900 truncate">{m.name || m.email.split('@')[0]}</p>
+                      <p className="text-xs text-slate-500 truncate">{m.email} · {t?.name ?? '—'}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-primary">{isOwner ? ROLE_LABELS.owner : ROLE_LABELS[m.role]}</p>
+                      <p className={cn('text-[11px] font-semibold', m.active ? 'text-green-700' : 'text-red-600')}>{m.active ? 'Ativo' : 'Inativo'}</p>
+                    </div>
+                    <ChevronRight className="size-4 text-slate-400 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 bg-white rounded-xl border border-border text-slate-500">Nenhum buffet nesta lista.</div>
         ) : (
@@ -220,6 +279,9 @@ export default function MasterPage() {
                   )}
                   {t.status_reason && <p className="text-xs text-slate-500">Motivo: {t.status_reason}</p>}
                   <div className="flex flex-wrap gap-2 pt-1">
+                    <Button variant="outline" onClick={() => setTeamOf(t)} className="min-h-[44px] gap-1.5">
+                      <Users className="w-4 h-4" />Usuários ({memberCount[t.id] || 0})
+                    </Button>
                     {t.status === 'pendente' && (<>
                       <Button onClick={() => open('approve', t)} className="min-h-[44px] gap-1.5"><Check className="w-4 h-4" />Aprovar</Button>
                       <Button variant="outline" onClick={() => open('refuse', t)} className="min-h-[44px] gap-1.5 text-destructive border-destructive/30"><X className="w-4 h-4" />Recusar</Button>
@@ -241,6 +303,16 @@ export default function MasterPage() {
           </div>
         )}
       </main>
+
+      <Dialog open={!!teamOf} onOpenChange={(o) => { if (!o) { setTeamOf(null); load(); } }}>
+        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Usuários — {teamOf?.name}</DialogTitle>
+            <DialogDescription>Crie, edite, inative ou exclua os logins deste buffet.</DialogDescription>
+          </DialogHeader>
+          {teamOf && <TeamManager key={teamOf.id} tenantId={teamOf.id} compact />}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!dlg} onOpenChange={(o) => !o && setDlg(null)}>
         <DialogContent className="max-w-md">

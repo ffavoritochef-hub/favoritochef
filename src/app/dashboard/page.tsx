@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,8 @@ type Alert = { key: string; tone: 'danger' | 'warning'; icon: 'wallet' | 'staff'
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { can } = useTenant();
+  const money = can('financeiro');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     eventsMonth: 0,
@@ -77,7 +80,7 @@ export default function DashboardPage() {
           .filter((e) => e.date >= today && e.date <= in30 && ['Aprovado', 'Em andamento'].includes(e.status))
           .forEach((e) => {
             const need = calcDeposit(Number(e.agreed_value) || 0, depositByEvent[e.id] ?? 30).deposit;
-            if (need > 0 && (received[e.id] || 0) + 0.005 < need) {
+            if (money && need > 0 && (received[e.id] || 0) + 0.005 < need) {
               alerts.push({
                 key: 'p' + e.id, tone: 'danger', icon: 'wallet', href: `/dashboard/events/${e.id}`,
                 text: `${e.name}: sinal pendente (${formatBRL(received[e.id] || 0)} de ${formatBRL(need)})`,
@@ -108,15 +111,24 @@ export default function DashboardPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [money]);
 
   const result = data.revenueMonth - data.costsMonth;
   const kpis = [
-    { label: 'Eventos no mês', value: String(data.eventsMonth), icon: CalendarIcon, tone: 'primary' },
-    { label: 'Faturamento fechado', value: formatBRL(data.revenueMonth), icon: DollarSign, tone: 'success' },
-    { label: 'Resultado do mês', value: formatBRL(result), icon: result >= 0 ? TrendingUp : TrendingDown, tone: result >= 0 ? 'success' : 'destructive', sub: `Custos vinculados: ${formatBRL(data.costsMonth)}` },
-    { label: 'Aguardando resposta', value: String(data.awaiting), icon: FileText, tone: 'warning' },
-  ] as const;
+    { label: 'Eventos no mês', value: String(data.eventsMonth), icon: CalendarIcon, tone: 'primary', show: true },
+    { label: 'Faturamento fechado', value: formatBRL(data.revenueMonth), icon: DollarSign, tone: 'success', show: money },
+    { label: 'Resultado do mês', value: formatBRL(result), icon: result >= 0 ? TrendingUp : TrendingDown, tone: result >= 0 ? 'success' : 'destructive', sub: `Custos vinculados: ${formatBRL(data.costsMonth)}`, show: money },
+    { label: 'Aguardando resposta', value: String(data.awaiting), icon: FileText, tone: 'warning', show: true },
+    { label: 'Clientes ativos', value: String(data.clients), icon: Users, tone: 'primary', show: !money },
+  ].filter((k) => k.show);
+  const quick = [
+    { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarIcon, bg: 'bg-primary/10 text-primary', ok: can('agenda') },
+    { href: '/dashboard/budgets/new', label: 'Orçamento', icon: FileText, bg: 'bg-success/10 text-success', ok: can('orcamentos') },
+    { href: '/dashboard/clients/new', label: 'Cliente', icon: Users, bg: 'bg-info/10 text-info', ok: can('clientes') },
+    { href: '/dashboard/finance', label: 'Financeiro', icon: DollarSign, bg: 'bg-warning/10 text-warning', ok: money },
+    { href: '/dashboard/menu', label: 'Cardápio', icon: Utensils, bg: 'bg-highlight/10 text-highlight', ok: can('cardapios') },
+    { href: '/dashboard/employees', label: 'Equipe', icon: HardHat, bg: 'bg-slate-100 text-slate-600', ok: can('funcionarios') },
+  ].filter((q) => q.ok);
   const toneBg: Record<string, string> = { primary: 'bg-primary/10 text-primary', success: 'bg-success/10 text-success', warning: 'bg-warning/10 text-warning', destructive: 'bg-destructive/10 text-destructive' };
 
   return (
@@ -133,6 +145,9 @@ export default function DashboardPage() {
         <p className="relative text-xs font-medium capitalize text-white/70">
           {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
+        {!money ? (
+          <p className="relative mt-4 text-2xl font-bold leading-tight">Bom trabalho hoje! 👋</p>
+        ) : (<>
         <p className="relative mt-4 text-[11px] font-semibold uppercase tracking-wider text-white/70">Resultado do mês</p>
         {loading ? (
           <div className="relative mt-1 h-10 w-44 animate-pulse rounded-lg bg-white/15" />
@@ -147,13 +162,14 @@ export default function DashboardPage() {
             <TrendingDown className="size-3.5" /> {formatBRL(data.costsMonth)}
           </span>
         </div>
+        </>)}
       </section>
 
       <div className="md:hidden relative -mt-[4.5rem] grid grid-cols-3 gap-2.5">
         {[
-          { label: 'Eventos no mês', value: data.eventsMonth, icon: CalendarIcon, tone: toneBg.primary, href: '/dashboard/events' },
-          { label: 'Aguardando', value: data.awaiting, icon: FileText, tone: toneBg.warning, href: '/dashboard/budgets' },
-          { label: 'Clientes', value: data.clients, icon: Users, tone: 'bg-info/10 text-info', href: '/dashboard/clients' },
+          { label: 'Eventos no mês', value: data.eventsMonth, icon: CalendarIcon, tone: toneBg.primary, href: can('eventos') ? '/dashboard/events' : '/dashboard' },
+          { label: 'Aguardando', value: data.awaiting, icon: FileText, tone: toneBg.warning, href: can('orcamentos') ? '/dashboard/budgets' : '/dashboard' },
+          { label: 'Clientes', value: data.clients, icon: Users, tone: 'bg-info/10 text-info', href: can('clientes') ? '/dashboard/clients' : '/dashboard' },
         ].map((s) => (
           <Link key={s.label} href={s.href} className="rounded-2xl bg-white p-3 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.18)]">
             <span className={`flex size-8 items-center justify-center rounded-lg ${s.tone}`}>
@@ -170,14 +186,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="md:hidden -mx-3 flex gap-4 overflow-x-auto px-4 pb-1 no-scrollbar">
-        {[
-          { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarIcon, bg: 'bg-primary/10 text-primary' },
-          { href: '/dashboard/budgets/new', label: 'Orçamento', icon: FileText, bg: 'bg-success/10 text-success' },
-          { href: '/dashboard/clients/new', label: 'Cliente', icon: Users, bg: 'bg-info/10 text-info' },
-          { href: '/dashboard/finance', label: 'Financeiro', icon: DollarSign, bg: 'bg-warning/10 text-warning' },
-          { href: '/dashboard/menu', label: 'Cardápio', icon: Utensils, bg: 'bg-highlight/10 text-highlight' },
-          { href: '/dashboard/employees', label: 'Equipe', icon: HardHat, bg: 'bg-slate-100 text-slate-600' },
-        ].map((q) => (
+        {quick.map((q) => (
           <Link key={q.href} href={q.href} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
             <span className={`flex size-14 items-center justify-center rounded-full ${q.bg}`}>
               <q.icon className="size-6" />
@@ -230,6 +239,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 w-full">
+        {can('eventos') && (
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"><span className="w-1.5 h-6 bg-primary rounded-full" />Próximos Eventos</h2>
@@ -267,7 +277,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </section>
+        )}
 
+        {can('orcamentos') && (
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"><span className="w-1.5 h-6 bg-warning rounded-full" />Propostas em aberto</h2>
@@ -302,17 +314,13 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </section>
+        )}
       </div>
 
       <section className="hidden md:block space-y-3 w-full">
         <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"><span className="w-1.5 h-6 bg-highlight rounded-full" />Acesso Rápido</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 w-full">
-          {[
-            { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarIcon, bg: 'bg-primary/10 text-primary' },
-            { href: '/dashboard/budgets/new', label: '+ Orçamento', icon: FileText, bg: 'bg-success/10 text-success' },
-            { href: '/dashboard/clients/new', label: '+ Cliente', icon: Users, bg: 'bg-info/10 text-info' },
-            { href: '/dashboard/menu', label: 'Cardápio', icon: Utensils, bg: 'bg-highlight/10 text-highlight' },
-          ].map((q) => (
+          {quick.map((q) => (
             <Link key={q.href} href={q.href} className="flex flex-col items-center gap-2 py-5 px-3 rounded-2xl border border-border bg-white hover:bg-primary/5 hover:border-primary/30 transition shadow-sm min-h-[96px]">
               <span className={`size-11 rounded-xl flex items-center justify-center ${q.bg}`}><q.icon className="size-6" /></span>
               <span className="text-sm font-semibold text-slate-700">{q.label}</span>
