@@ -59,6 +59,7 @@ import {
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { deleteEvent } from '@/lib/events';
 
 const statusStyles: Record<string, string> = {
   'Orçamento enviado': 'bg-sky-600 text-white border-sky-600 rounded-full',
@@ -120,6 +121,21 @@ export default function EventDetailPage() {
   const [paymentLoading, setPaymentLoading] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteEventOpen, setDeleteEventOpen] = useState(false);
+  const [deletingEvent, setDeletingEvent] = useState(false);
+
+  async function handleDeleteEvent() {
+    setDeletingEvent(true);
+    try {
+      await deleteEvent(eventId);
+      toast.success('Evento excluído.');
+      router.push('/dashboard/events');
+    } catch (error) {
+      toast.error((error as Error).message || 'Falha ao excluir o evento.');
+      setDeletingEvent(false);
+    }
+  }
+
   const [confirmData, setConfirmData] = useState<{
     id: string;
     kind: 'payment_delete';
@@ -434,6 +450,14 @@ export default function EventDetailPage() {
               <Receipt className="w-4.5 h-4.5" />
               Orçamento / Proposta
             </Link>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setDeleteEventOpen(true)}
+            className="h-12 border-slate-200 text-slate-500 hover:text-destructive hover:bg-destructive/5 rounded-xl font-semibold px-4 flex items-center gap-2 w-full sm:w-auto"
+          >
+            <Trash2 className="w-4.5 h-4.5" />
+            Excluir
           </Button>
         </div>
       </header>
@@ -1090,6 +1114,17 @@ export default function EventDetailPage() {
       </Dialog>
 
       {/* CONFIRM DIALOG */}
+      <ConfirmDialog
+        open={deleteEventOpen}
+        onOpenChange={(v) => !deletingEvent && setDeleteEventOpen(v)}
+        title="Excluir este evento?"
+        description="O evento, seus orçamentos, a equipe escalada e os pagamentos registrados nele serão apagados. Lançamentos do financeiro continuam lá. Se só não vai acontecer, prefira mudar o status para Cancelado."
+        variant="destructive"
+        dangerLabel="Exclusão permanente."
+        confirmText="Sim, excluir"
+        onConfirm={handleDeleteEvent}
+        loading={deletingEvent}
+      />
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={(v) => {

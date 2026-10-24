@@ -28,6 +28,7 @@ import {
   UserPlus,
   Receipt,
   Store,
+  Calculator,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -49,7 +50,8 @@ const menuItems = [
   { title: 'Eventos', icon: Calendar, url: '/dashboard/events', tone: 'bg-indigo-50 text-indigo-600' },
   { title: 'Agenda', icon: CalendarDays, url: '/dashboard/agenda', tone: 'bg-violet-50 text-violet-600' },
   { title: 'Funcionários', icon: HardHat, url: '/dashboard/employees', tone: 'bg-amber-50 text-amber-600' },
-  { title: 'Cardápio', icon: Utensils, url: '/dashboard/menu', tone: 'bg-orange-50 text-orange-600' },
+  { title: 'Cardápios', icon: Utensils, url: '/dashboard/menu', tone: 'bg-orange-50 text-orange-600' },
+  { title: 'Pré-orçamento', icon: Calculator, url: '/dashboard/pre-orcamento', tone: 'bg-teal-50 text-teal-600' },
   { title: 'Orçamentos', icon: FileText, url: '/dashboard/budgets', tone: 'bg-emerald-50 text-emerald-600' },
   { title: 'Vitrine', icon: Store, url: '/dashboard/vitrine', tone: 'bg-fuchsia-50 text-fuchsia-600' },
   { title: 'Financeiro', icon: DollarSign, url: '/dashboard/finance', tone: 'bg-green-50 text-green-600' },
@@ -69,6 +71,7 @@ const tabItems = [
 const createActions = [
   { title: 'Novo evento', desc: 'Agendar um buffet', icon: CalendarDays, url: '/dashboard/events/new', tone: 'bg-indigo-50 text-indigo-600' },
   { title: 'Novo orçamento', desc: 'Montar proposta', icon: FileText, url: '/dashboard/budgets/new', tone: 'bg-emerald-50 text-emerald-600' },
+  { title: 'Pré-orçamento', desc: 'Quanto cobrar', icon: Calculator, url: '/dashboard/pre-orcamento', tone: 'bg-teal-50 text-teal-600' },
   { title: 'Novo cliente', desc: 'Cadastrar contato', icon: UserPlus, url: '/dashboard/clients/new', tone: 'bg-sky-50 text-sky-600' },
   { title: 'Lançamento', desc: 'Conta a pagar/receber', icon: Receipt, url: '/dashboard/finance/new', tone: 'bg-green-50 text-green-600' },
 ];

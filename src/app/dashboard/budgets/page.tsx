@@ -16,8 +16,11 @@ import {
   FileText, 
   Download, 
   MessageSquare,
-  Eye
+  Eye,
+  Pencil,
+  Trash2
 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { authFetch, openProtectedPdf } from '@/lib/api-client';
 import Link from 'next/link';
@@ -34,6 +37,19 @@ const statusStyles: Record<string, string> = {
 export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toDelete, setToDelete] = useState<{ id: string; events?: { name?: string } | null } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function confirmDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
+    const { error } = await supabase.from('budgets').delete().eq('id', toDelete.id);
+    setDeleting(false);
+    if (error) return toast.error('Erro ao excluir: ' + error.message);
+    toast.success('Orçamento excluído.');
+    setToDelete(null);
+    fetchBudgets();
+  }
 
   useEffect(() => {
     fetchBudgets();
@@ -180,6 +196,16 @@ export default function BudgetsPage() {
                       <Download />
                       Baixar PDF
                     </Button>
+                    <Button asChild variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700">
+                      <Link href={`/dashboard/budgets/${budget.id}/edit`}>
+                        <Pencil />
+                        Editar
+                      </Link>
+                    </Button>
+                    <Button variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700 hover:text-destructive" onClick={() => setToDelete(budget)}>
+                      <Trash2 />
+                      Excluir
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -276,6 +302,25 @@ export default function BudgetsPage() {
                       >
                         <Download />
                       </Button>
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-primary hover:bg-primary/5"
+                        title="Editar orçamento"
+                      >
+                        <Link href={`/dashboard/budgets/${budget.id}/edit`} aria-label="Editar orçamento"><Pencil /></Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-destructive hover:bg-destructive/5"
+                        onClick={() => setToDelete(budget)}
+                        title="Excluir orçamento"
+                        aria-label="Excluir orçamento"
+                      >
+                        <Trash2 />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -285,6 +330,16 @@ export default function BudgetsPage() {
           </Table>
         </div>
       </div>
+      <ConfirmDialog
+        open={!!toDelete}
+        onOpenChange={(o) => !o && setToDelete(null)}
+        title="Excluir orçamento?"
+        description={toDelete ? `O orçamento de "${toDelete.events?.name ?? 'evento'}" será apagado. Se a proposta já foi enviada, o link do cliente deixa de funcionar. O evento continua cadastrado.` : ''}
+        confirmText="Excluir"
+        variant="destructive"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

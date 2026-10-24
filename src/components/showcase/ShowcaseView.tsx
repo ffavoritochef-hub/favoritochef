@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, MapPin, MessageCircle, PartyPopper, Quote, Send, Star, UtensilsCrossed, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { darken } from '@/lib/tenant';
 import { whatsappUrl } from '@/lib/leads';
-import type { SectionKey, ShowcaseContent, ShowcaseMenu, ShowcaseTheme } from '@/lib/showcase';
+import { SECTION_META, type SectionKey, type ShowcaseContent, type ShowcaseMenu, type ShowcaseTheme } from '@/lib/showcase';
 import { playfair, poppins } from './fonts';
 
 export interface ShowcaseData {
@@ -16,6 +16,15 @@ export interface ShowcaseData {
   content: ShowcaseContent;
   menus: ShowcaseMenu[];
 }
+
+const SECTION_ID: Record<SectionKey, string> = {
+  about: 'sobre',
+  gallery: 'galeria',
+  events: 'eventos',
+  menus: 'cardapios',
+  testimonials: 'depoimentos',
+  contact: 'contato',
+};
 
 /** Classes de cada estilo. A cor do buffet entra via --brand / --brand-dark. */
 const THEME_STYLE: Record<
@@ -65,6 +74,16 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
   const { brand, content: c, menus } = data;
   const t = THEME_STYLE[c.theme];
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const heroImages = [c.hero.image, ...c.hero.slides].filter((u): u is string => !!u);
+  const [heroSlide, setHeroIndex] = useState(0);
+  const heroIndex = heroSlide < heroImages.length ? heroSlide : 0;
+
+  // capa em carrossel: troca a foto a cada 5 s
+  useEffect(() => {
+    if (heroImages.length < 2) return;
+    const id = setInterval(() => setHeroIndex((i) => (i + 1) % heroImages.length), 5000);
+    return () => clearInterval(id);
+  }, [heroImages.length]);
 
   // conta a visita (1 por aba); a prévia do editor não conta
   useEffect(() => {
@@ -127,25 +146,49 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
           <section key={key} id="galeria" className={cn('py-16 sm:py-24', bg)}>
             <div className="max-w-6xl mx-auto px-5 sm:px-8">
               <SectionHead eyebrow="Galeria" title={title('gallery')} heading={t.heading} />
-              <div className="columns-2 md:columns-3 gap-3 sm:gap-4">
-                {c.gallery.map((g, gi) => (
-                  <button
-                    key={g.url + gi}
-                    type="button"
-                    onClick={() => setLightbox(gi)}
-                    className={cn('group relative mb-3 sm:mb-4 block w-full overflow-hidden break-inside-avoid', t.radius)}
-                    aria-label={g.caption || `Foto ${gi + 1}`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={g.url} alt={g.caption || brand.name} loading="lazy" className="w-full h-auto transition duration-500 group-hover:scale-105" />
-                    {g.caption && (
-                      <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 text-left text-sm text-white">
-                        {g.caption}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
+              {c.galleryLayout === 'carrossel' ? (
+                <Carousel images={c.gallery} radius={t.radius} onOpen={setLightbox} />
+              ) : c.galleryLayout === 'grade' ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
+                  {c.gallery.map((g, gi) => (
+                    <button
+                      key={g.url + gi}
+                      type="button"
+                      onClick={() => setLightbox(gi)}
+                      className={cn('group relative block aspect-square overflow-hidden', t.radius)}
+                      aria-label={g.caption || `Foto ${gi + 1}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={g.url} alt={g.caption || brand.name} loading="lazy" className="absolute inset-0 size-full object-cover transition duration-500 group-hover:scale-105" />
+                      {g.caption && (
+                        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 text-left text-xs sm:text-sm text-white">
+                          {g.caption}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="columns-2 md:columns-3 gap-3 sm:gap-4">
+                  {c.gallery.map((g, gi) => (
+                    <button
+                      key={g.url + gi}
+                      type="button"
+                      onClick={() => setLightbox(gi)}
+                      className={cn('group relative mb-3 sm:mb-4 block w-full overflow-hidden break-inside-avoid', t.radius)}
+                      aria-label={g.caption || `Foto ${gi + 1}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={g.url} alt={g.caption || brand.name} loading="lazy" className="w-full h-auto transition duration-500 group-hover:scale-105" />
+                      {g.caption && (
+                        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 text-left text-sm text-white">
+                          {g.caption}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         );
@@ -186,32 +229,45 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
                 {menus.map((m) => {
                   const shown = m.items.slice(0, 10);
                   return (
-                    <article key={m.id} className={cn('p-6 sm:p-7 flex flex-col', t.card, t.radius)}>
-                      <div className="flex items-start gap-3">
-                        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--brand)]/10 text-[var(--brand)]">
-                          <UtensilsCrossed className="size-5" />
-                        </span>
-                        <div className="min-w-0">
-                          <h3 className={cn('text-xl', t.heading)}>{m.name}</h3>
-                          {m.description && <p className={cn('mt-1', t.muted)}>{m.description}</p>}
+                    <article key={m.id} className={cn('overflow-hidden flex flex-col', t.card, t.radius)}>
+                      {m.image && (
+                        <div className="relative aspect-[16/9]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={m.image} alt={m.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                          {m.imageCredit && (
+                            <span className="absolute bottom-1 right-2 text-[10px] text-white/80 drop-shadow">{m.imageCredit}</span>
+                          )}
                         </div>
+                      )}
+                      <div className="p-6 sm:p-7 flex-1 flex flex-col">
+                        <div className="flex items-start gap-3">
+                          {!m.image && (
+                            <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--brand)]/10 text-[var(--brand)]">
+                              <UtensilsCrossed className="size-5" />
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <h3 className={cn('text-xl', t.heading)}>{m.name}</h3>
+                            {m.description && <p className={cn('mt-1', t.muted)}>{m.description}</p>}
+                          </div>
+                        </div>
+                        {shown.length > 0 && (
+                          <ul className="mt-5 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                            {shown.map((it, ii) => (
+                              <li key={ii} className="flex items-start gap-2 text-[15px]">
+                                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--brand)]" />
+                                <span>{it}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {m.items.length > shown.length && (
+                          <p className={cn('mt-3 text-sm', t.muted)}>e mais {m.items.length - shown.length} itens</p>
+                        )}
+                        <a href={quoteUrl} {...linkTarget} className="mt-auto pt-6 self-start text-sm font-semibold text-[var(--brand)] hover:underline">
+                          Quero um orçamento com este cardápio →
+                        </a>
                       </div>
-                      {shown.length > 0 && (
-                        <ul className="mt-5 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                          {shown.map((it, ii) => (
-                            <li key={ii} className="flex items-start gap-2 text-[15px]">
-                              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--brand)]" />
-                              <span>{it}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {m.items.length > shown.length && (
-                        <p className={cn('mt-3 text-sm', t.muted)}>e mais {m.items.length - shown.length} itens</p>
-                      )}
-                      <a href={quoteUrl} {...linkTarget} className="mt-6 self-start text-sm font-semibold text-[var(--brand)] hover:underline">
-                        Quero um orçamento com este cardápio →
-                      </a>
                     </article>
                   );
                 })}
@@ -298,6 +354,15 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
             </span>
           )}
           <span className={cn('flex-1 min-w-0 truncate text-lg', t.heading)}>{brand.name}</span>
+          <nav className="hidden lg:flex items-center gap-1 text-sm font-medium" aria-label="Seções">
+            {visible
+              .filter((s) => s.key !== 'contact')
+              .map((s) => (
+                <a key={s.key} href={`#${SECTION_ID[s.key]}`} className={cn('px-3 py-2 rounded-lg hover:text-[var(--brand)]', t.muted)}>
+                  {SECTION_META[s.key].label}
+                </a>
+              ))}
+          </nav>
           <a href={quoteUrl} {...linkTarget} className={cn('inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-[var(--brand)] hover:bg-[var(--brand-dark)] transition', t.radius)}>
             Orçamento
           </a>
@@ -306,11 +371,32 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
 
       {/* Capa */}
       <section className="relative isolate overflow-hidden min-h-[min(78svh,860px)] flex items-end">
-        {c.hero.image ? (
+        {heroImages.length > 0 ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={c.hero.image} alt="" className="absolute inset-0 -z-20 size-full object-cover" />
+            {heroImages.map((src, hi) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={src + hi}
+                src={src}
+                alt=""
+                loading={hi === 0 ? 'eager' : 'lazy'}
+                className={cn('absolute inset-0 -z-20 size-full object-cover transition-opacity duration-1000', hi === heroIndex ? 'opacity-100' : 'opacity-0')}
+              />
+            ))}
             <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/35 to-black/10" />
+            {heroImages.length > 1 && (
+              <div className="absolute bottom-5 right-5 sm:right-8 z-10 flex gap-2">
+                {heroImages.map((_, hi) => (
+                  <button
+                    key={hi}
+                    type="button"
+                    onClick={() => setHeroIndex(hi)}
+                    className={cn('h-2 rounded-full transition-all', hi === heroIndex ? 'w-6 bg-white' : 'w-2 bg-white/50')}
+                    aria-label={`Foto ${hi + 1} da capa`}
+                  />
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[var(--brand)] to-[var(--brand-dark)]">
@@ -360,6 +446,90 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
 
       {lightbox !== null && c.gallery[lightbox] && (
         <Lightbox images={c.gallery} index={lightbox} onChange={setLightbox} onClose={() => setLightbox(null)} />
+      )}
+    </div>
+  );
+}
+
+function Carousel({
+  images,
+  radius,
+  onOpen,
+}: {
+  images: { url: string; caption: string }[];
+  radius: string;
+  onOpen: (i: number) => void;
+}) {
+  const track = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+
+  const scrollTo = (i: number) => {
+    const el = track.current?.children[i] as HTMLElement | undefined;
+    if (el && track.current) track.current.scrollTo({ left: el.offsetLeft - track.current.offsetLeft, behavior: 'smooth' });
+  };
+  const onScroll = () => {
+    const el = track.current;
+    if (!el) return;
+    const first = el.children[0] as HTMLElement | undefined;
+    const step = first ? first.offsetWidth + 16 : 1;
+    setActive(Math.max(0, Math.min(images.length - 1, Math.round(el.scrollLeft / step))));
+  };
+
+  return (
+    <div className="relative">
+      <div
+        ref={track}
+        onScroll={onScroll}
+        className="flex gap-3 sm:gap-4 overflow-x-auto snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {images.map((g, gi) => (
+          <button
+            key={g.url + gi}
+            type="button"
+            onClick={() => onOpen(gi)}
+            className={cn('group relative shrink-0 snap-center w-[86%] sm:w-[72%] lg:w-[62%] aspect-[4/3] sm:aspect-[16/10] overflow-hidden', radius)}
+            aria-label={g.caption || `Foto ${gi + 1}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={g.url} alt={g.caption} loading="lazy" className="absolute inset-0 size-full object-cover transition duration-500 group-hover:scale-105" />
+            {g.caption && (
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-4 pt-10 text-left text-white">{g.caption}</span>
+            )}
+          </button>
+        ))}
+      </div>
+      {images.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => scrollTo(Math.max(0, active - 1))}
+            className="absolute left-2 top-[calc(50%-1rem)] -translate-y-1/2 hidden sm:flex size-12 rounded-full bg-white/90 text-slate-800 shadow-lg items-center justify-center hover:bg-white disabled:opacity-40"
+            disabled={active === 0}
+            aria-label="Foto anterior"
+          >
+            <ChevronLeft className="size-6" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollTo(Math.min(images.length - 1, active + 1))}
+            className="absolute right-2 top-[calc(50%-1rem)] -translate-y-1/2 hidden sm:flex size-12 rounded-full bg-white/90 text-slate-800 shadow-lg items-center justify-center hover:bg-white disabled:opacity-40"
+            disabled={active === images.length - 1}
+            aria-label="Próxima foto"
+          >
+            <ChevronRight className="size-6" />
+          </button>
+          <div className="mt-4 flex justify-center gap-1.5">
+            {images.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => scrollTo(i)}
+                className={cn('h-2 rounded-full transition-all', i === active ? 'w-6 bg-[var(--brand)]' : 'w-2 bg-[var(--brand)]/30')}
+                aria-label={`Ir para a foto ${i + 1}`}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

@@ -12,8 +12,11 @@ import {
   BadgeCheck,
   Eye,
   Pencil,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { deleteEvent } from '@/lib/events';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -30,6 +33,8 @@ const statusStyles: Record<string, string> = {
 export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toDelete, setToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchEvents();
@@ -49,6 +54,21 @@ export default function EventsPage() {
       toast.error('Erro ao carregar eventos: ' + error.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await deleteEvent(toDelete.id);
+      toast.success('Evento excluído.');
+      setToDelete(null);
+      fetchEvents();
+    } catch (error) {
+      toast.error((error as Error).message || 'Falha ao excluir o evento.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -120,7 +140,7 @@ export default function EventsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 sm:flex sm:justify-end gap-2 w-full pt-4 border-t border-border">
+                <div className="grid grid-cols-4 sm:flex sm:justify-end gap-2 w-full pt-4 border-t border-border">
                   <Button asChild variant="outline" className="h-11 rounded-xl font-semibold px-2 sm:px-5 border-slate-200 text-slate-700 hover:bg-slate-50">
                     <Link href={`/dashboard/events/${event.id}`}>
                       <Eye className="hidden sm:block" />
@@ -139,12 +159,31 @@ export default function EventsPage() {
                       Orçamento
                     </Link>
                   </Button>
+                  <Button
+                    variant="outline"
+                    className="h-11 rounded-xl px-2 sm:px-3 border-slate-200 text-slate-500 hover:text-destructive hover:bg-destructive/5"
+                    onClick={() => setToDelete(event)}
+                    title="Excluir evento"
+                    aria-label="Excluir evento"
+                  >
+                    <Trash2 />
+                  </Button>
                 </div>
               </div>
             </div>
           ))
         )}
       </div>
+      <ConfirmDialog
+        open={!!toDelete}
+        onOpenChange={(o) => !deleting && !o && setToDelete(null)}
+        title="Excluir evento?"
+        description={toDelete ? `"${toDelete.name}" será apagado junto com orçamentos, equipe escalada e pagamentos dele. Lançamentos do financeiro continuam. Se só não vai acontecer, prefira mudar o status para Cancelado.` : ''}
+        variant="destructive"
+        confirmText="Sim, excluir"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

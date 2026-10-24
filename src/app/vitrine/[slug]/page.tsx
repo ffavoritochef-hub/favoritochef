@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation';
 import { adminClient } from '@/lib/server-supabase';
 import { computeAccess, safeColor } from '@/lib/tenant';
 import { isValidSlug } from '@/lib/leads';
-import { normalizeShowcase, pickMenus, type ShowcaseMenu } from '@/lib/showcase';
+import { SHOWCASE_MENU_SELECT, SHOWCASE_MENU_SELECT_BASIC, normalizeShowcase, pickMenus, toShowcaseMenus, type ShowcaseMenu } from '@/lib/showcase';
+import { libraryMenu } from '@/lib/menu-library';
 import { ShowcaseView, type ShowcaseData } from '@/components/showcase/ShowcaseView';
 
 export const dynamic = 'force-dynamic';
@@ -31,25 +32,11 @@ const loadShowcase = cache(async (slug: string): Promise<ShowcaseData | null> =>
   const content = normalizeShowcase(s.content, t.name);
   let menus: ShowcaseMenu[] = [];
   if (content.sections.some((x) => x.key === 'menus' && x.enabled)) {
-    const { data: m, error: mErr } = await db
-      .from('menu_templates')
-      .select('id, name, description, is_active, items:menu_template_items(custom_item_name)')
-      .eq('tenant_id', t.id)
-      .order('name');
-    if (mErr) throw mErr;
-    menus = pickMenus(
-      (m ?? [])
-        .filter((x) => x.is_active !== false)
-        .map((x) => ({
-          id: String(x.id),
-          name: x.name,
-          description: x.description || null,
-          items: ((x.items as { custom_item_name: string | null }[] | null) ?? [])
-            .map((i) => i.custom_item_name?.trim())
-            .filter((n): n is string => !!n),
-        })),
-      content.menuIds
-    );
+    const query = (cols: string) => db.from('menu_templates').select(cols).eq('tenant_id', t.id).order('name');
+    let res = await query(SHOWCASE_MENU_SELECT);
+    if (res.error && (res.error.code === 'PGRST204' || res.error.code === '42703')) res = await query(SHOWCASE_MENU_SELECT_BASIC); // migração 0009 pendente
+    if (res.error) throw res.error;
+    menus = pickMenus(toShowcaseMenus((res.data ?? []) as never[], (k) => libraryMenu(k)?.image ?? null), content.menuIds);
   }
 
   return {

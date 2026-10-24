@@ -13,6 +13,7 @@ import {
   MessageCircle,
   NotebookPen,
   PartyPopper,
+  Pencil,
   Plus,
   Save,
   Send,
@@ -28,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatBRL } from '@/lib/buffet-rules';
 import {
   EVENT_TYPES,
@@ -105,6 +107,7 @@ export default function LeadDetailPage() {
   // nova anotação
   const [noteForm, setNoteForm] = useState<{ kind: NoteKind; body: string }>({ kind: 'nota', body: '' });
 
+  const [contactForm, setContactForm] = useState<{ name: string; phone: string } | null>(null);
   const [toDelete, setToDelete] = useState<{ type: 'lead' | 'offer' | 'note'; id: string; label: string } | null>(null);
 
   const templateName = useCallback((tid: string | null) => templates.find((t) => t.id === tid)?.name ?? null, [templates]);
@@ -173,6 +176,19 @@ export default function LeadDetailPage() {
     setLead({ ...lead, ...patch });
     if (okMsg) toast.success(okMsg);
     return true;
+  }
+
+  async function saveContact(e: React.FormEvent) {
+    e.preventDefault();
+    if (!contactForm) return;
+    const name = contactForm.name.trim();
+    const phone = contactForm.phone.trim();
+    if (name.length < 2) return toast.error('Informe o nome.');
+    if (phone.replace(/\D/g, '').length < 10) return toast.error('Telefone inválido (use DDD + número).');
+    setSaving(true);
+    const ok = await patchLead({ name, phone }, 'Contato atualizado.');
+    setSaving(false);
+    if (ok) setContactForm(null);
   }
 
   async function addNote(kind: NoteKind, body: string, silent = false) {
@@ -360,6 +376,9 @@ export default function LeadDetailPage() {
             </Button>
           )
         )}
+        <Button type="button" variant="outline" onClick={() => setContactForm({ name: lead.name, phone: lead.phone })} className="gap-1.5">
+          <Pencil className="size-4" /> Editar contato
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -767,6 +786,31 @@ export default function LeadDetailPage() {
           </ul>
         )}
       </section>
+
+      <Dialog open={!!contactForm} onOpenChange={(o) => !o && setContactForm(null)}>
+        <DialogContent className="max-w-sm !rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar contato</DialogTitle>
+            <DialogDescription>Corrija o nome ou o WhatsApp do lead.</DialogDescription>
+          </DialogHeader>
+          {contactForm && (
+            <form onSubmit={saveContact} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="lead-name">Nome</Label>
+                <Input id="lead-name" maxLength={120} value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lead-phone">WhatsApp</Label>
+                <Input id="lead-phone" inputMode="tel" maxLength={30} value={contactForm.phone} onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })} />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setContactForm(null)}>Cancelar</Button>
+                <Button type="submit" disabled={saving}>{saving && <Loader2 className="size-4 animate-spin" />} Salvar</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!toDelete}

@@ -23,8 +23,17 @@ export const SECTION_META: Record<SectionKey, { label: string; defaultTitle: str
 
 export const SECTION_KEYS = Object.keys(SECTION_META) as SectionKey[];
 
+export type GalleryLayout = 'grade' | 'carrossel' | 'mosaico';
+
+export const GALLERY_LAYOUTS: Record<GalleryLayout, { label: string; hint: string }> = {
+  mosaico: { label: 'Mosaico', hint: 'Fotos em colunas, cada uma no seu formato' },
+  grade: { label: 'Grade', hint: 'Quadradinhos alinhados, visual organizado' },
+  carrossel: { label: 'Carrossel', hint: 'Uma foto grande por vez, passando para o lado' },
+};
+
 export const SHOWCASE_LIMITS = {
   gallery: 30,
+  heroSlides: 6,
   events: 8,
   testimonials: 10,
   title: 80,
@@ -59,9 +68,11 @@ export interface ShowcaseSection {
 
 export interface ShowcaseContent {
   theme: ShowcaseTheme;
-  hero: { title: string; subtitle: string; image: string | null };
+  /** image = foto principal; slides = fotos extras que viram carrossel na capa. */
+  hero: { title: string; subtitle: string; image: string | null; slides: string[] };
   about: { text: string; image: string | null };
   gallery: ShowcaseImage[];
+  galleryLayout: GalleryLayout;
   events: ShowcaseEventType[];
   /** Cardápios exibidos. Vazio = todos os ativos. */
   menuIds: string[];
@@ -76,6 +87,9 @@ export interface ShowcaseMenu {
   name: string;
   description: string | null;
   items: string[];
+  image?: string | null;
+  imageCredit?: string | null;
+  pricePerPerson?: number | null;
 }
 
 export function defaultShowcase(name = ''): ShowcaseContent {
@@ -85,9 +99,11 @@ export function defaultShowcase(name = ''): ShowcaseContent {
       title: name,
       subtitle: 'Buffet completo para casamentos, aniversários e eventos corporativos.',
       image: null,
+      slides: [],
     },
     about: { text: '', image: null },
     gallery: [],
+    galleryLayout: 'mosaico',
     events: [],
     menuIds: [],
     testimonials: [],
@@ -143,6 +159,7 @@ export function normalizeShowcase(raw: unknown, name = ''): ShowcaseContent {
       title: str(hero.title, L.title) || base.hero.title,
       subtitle: typeof hero.subtitle === 'string' ? str(hero.subtitle, L.subtitle) : base.hero.subtitle,
       image: img(hero.image),
+      slides: arr(hero.slides).filter(isImageUrl).slice(0, L.heroSlides),
     },
     about: { text: str(about.text, L.text), image: img(about.image) },
     gallery: arr(raw.gallery)
@@ -150,6 +167,8 @@ export function normalizeShowcase(raw: unknown, name = ''): ShowcaseContent {
       .filter((g) => isImageUrl(g.url))
       .slice(0, L.gallery)
       .map((g) => ({ url: g.url as string, caption: str(g.caption, L.caption) })),
+    galleryLayout:
+      typeof raw.galleryLayout === 'string' && raw.galleryLayout in GALLERY_LAYOUTS ? (raw.galleryLayout as GalleryLayout) : base.galleryLayout,
     events: arr(raw.events)
       .filter(isObj)
       .map((e) => ({ title: str(e.title, L.title), text: str(e.text, L.shortText), image: img(e.image) }))
@@ -171,7 +190,7 @@ export function normalizeShowcase(raw: unknown, name = ''): ShowcaseContent {
 
 /** Todas as fotos usadas no conteúdo (para apagar do storage as que saíram). */
 export function showcaseImageUrls(c: ShowcaseContent): string[] {
-  return [c.hero.image, c.about.image, ...c.gallery.map((g) => g.url), ...c.events.map((e) => e.image)].filter(
+  return [c.hero.image, ...c.hero.slides, c.about.image, ...c.gallery.map((g) => g.url), ...c.events.map((e) => e.image)].filter(
     (u): u is string => !!u
   );
 }
@@ -188,4 +207,38 @@ export function pickMenus<T extends { id: string }>(menus: T[], ids: string[]): 
   if (!ids.length) return menus;
   const wanted = new Set(ids);
   return menus.filter((m) => wanted.has(m.id));
+}
+
+// ---------- Cardápios (linhas de menu_templates → ShowcaseMenu) ----------
+
+export const SHOWCASE_MENU_SELECT: string =
+  'id, name, description, is_active, image_url, image_credit, library_key, items:menu_template_items(custom_item_name, position)';
+export const SHOWCASE_MENU_SELECT_BASIC: string = 'id, name, description, is_active, items:menu_template_items(custom_item_name)';
+
+interface MenuRow {
+  id: string | number;
+  name: string;
+  description?: string | null;
+  is_active?: boolean | null;
+  image_url?: string | null;
+  image_credit?: string | null;
+  library_key?: string | null;
+  items?: { custom_item_name: string | null; position?: number | null }[] | null;
+}
+
+/** Converte as linhas do banco (ativas) para o formato da vitrine, na ordem dos itens. */
+export function toShowcaseMenus(rows: MenuRow[], libraryImage: (key: string | null | undefined) => string | null): ShowcaseMenu[] {
+  return rows
+    .filter((m) => m.is_active !== false)
+    .map((m) => ({
+      id: String(m.id),
+      name: m.name,
+      description: m.description || null,
+      image: m.image_url || libraryImage(m.library_key),
+      imageCredit: m.image_credit || null,
+      items: [...(m.items ?? [])]
+        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        .map((i) => i.custom_item_name?.trim())
+        .filter((n): n is string => !!n),
+    }));
 }

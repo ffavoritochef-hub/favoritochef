@@ -36,9 +36,13 @@ import { EVENT_TYPES } from '@/lib/leads';
 import { resizeToJpegBlob } from '@/lib/image-utils';
 import { ShowcaseView } from '@/components/showcase/ShowcaseView';
 import { ShowcaseQrDialog } from '@/components/showcase/ShowcaseQrDialog';
+import { libraryMenu } from '@/lib/menu-library';
 import {
+  GALLERY_LAYOUTS,
   SECTION_META,
   SHOWCASE_BUCKET,
+  SHOWCASE_MENU_SELECT,
+  SHOWCASE_MENU_SELECT_BASIC,
   SHOWCASE_LIMITS as L,
   SHOWCASE_THEMES,
   defaultShowcase,
@@ -47,6 +51,8 @@ import {
   pickMenus,
   showcaseImageUrls,
   storagePathFromUrl,
+  toShowcaseMenus,
+  type GalleryLayout,
   type SectionKey,
   type ShowcaseContent,
   type ShowcaseMenu,
@@ -86,12 +92,15 @@ export default function ShowcaseEditorPage() {
   useEffect(() => {
     if (!tenant) return;
     (async () => {
-      const [show, menuRes] = await Promise.all([
+      const loadMenus = async () => {
+        const full = await supabase.from('menu_templates').select(SHOWCASE_MENU_SELECT).order('name');
+        if (!full.error) return full.data ?? [];
+        const basic = await supabase.from('menu_templates').select(SHOWCASE_MENU_SELECT_BASIC).order('name');
+        return basic.data ?? [];
+      };
+      const [show, menuRows] = await Promise.all([
         supabase.from('tenant_showcase').select('content, published').eq('tenant_id', tenant.id).maybeSingle(),
-        supabase
-          .from('menu_templates')
-          .select('id, name, description, is_active, items:menu_template_items(custom_item_name)')
-          .order('name'),
+        loadMenus(),
       ]);
       if (show.error) {
         if (show.error.code === 'PGRST205' || show.error.code === '42P01') setMissingTable(true);
@@ -102,18 +111,7 @@ export default function ShowcaseEditorPage() {
       setSavedJson(JSON.stringify(c));
       setSavedUrls(showcaseImageUrls(c));
       setPublished(!!show.data?.published);
-      setMenus(
-        (menuRes.data ?? [])
-          .filter((m) => m.is_active !== false)
-          .map((m) => ({
-            id: String(m.id),
-            name: m.name,
-            description: m.description || null,
-            items: ((m.items as { custom_item_name: string | null }[] | null) ?? [])
-              .map((i) => i.custom_item_name?.trim())
-              .filter((n): n is string => !!n),
-          }))
-      );
+      setMenus(toShowcaseMenus(menuRows as never[], (k) => libraryMenu(k)?.image ?? null));
     })();
   }, [tenant]);
 
@@ -185,6 +183,23 @@ export default function ShowcaseEditorPage() {
     } finally {
       setUploading(null);
     }
+  }
+
+  async function addHeroSlides(files: FileList | null) {
+    if (!files?.length) return;
+    const room = L.heroSlides - content!.hero.slides.length;
+    const list = Array.from(files).slice(0, room);
+    if (files.length > room) toast.warning(`A capa aceita até ${L.heroSlides} fotos extras. Enviando ${list.length}.`);
+    for (let i = 0; i < list.length; i++) {
+      setUploading(`slides:${i + 1}/${list.length}`);
+      try {
+        const url = await uploadImage(list[i], 2000);
+        update((c) => ({ ...c, hero: { ...c.hero, slides: [...c.hero.slides, url].slice(0, L.heroSlides) } }));
+      } catch (e) {
+        toast.error(`${list[i].name}: ${(e as Error).message}`);
+      }
+    }
+    setUploading(null);
   }
 
   async function addGallery(files: FileList | null) {
@@ -262,7 +277,7 @@ export default function ShowcaseEditorPage() {
         const suggested = out.events as { title: string; text: string }[];
         return {
           ...c,
-          hero: { title: out.heroTitle || c.hero.title, subtitle: out.heroSubtitle || c.hero.subtitle, image: c.hero.image ?? out.cover },
+          hero: { title: out.heroTitle || c.hero.title, subtitle: out.heroSubtitle || c.hero.subtitle, image: c.hero.image ?? out.cover, slides: c.hero.slides },
           about: { ...c.about, text: out.aboutText || c.about.text },
           contact: { ...c.contact, text: out.contactText || c.contact.text },
           gallery: [...ordered, ...rest],
@@ -447,6 +462,13 @@ export default function ShowcaseEditorPage() {
             onPick={(f) => pickOne('hero', f, (url) => update((c) => ({ ...c, hero: { ...c.hero, image: url } })), 2000)}
             onRemove={() => update((c) => ({ ...c, hero: { ...c.hero, image: null } }))}
           />
+          <HeroSlides
+            slides={content.hero.slides}
+            uploading={uploading}
+            disabled={busy || !content.hero.image}
+            onAdd={addHeroSlides}
+            onChange={(slides) => update((c) => ({ ...c, hero: { ...c.hero, slides } }))}
+          />
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="hero-title">Título</Label>
@@ -519,6 +541,29 @@ export default function ShowcaseEditorPage() {
               )}
 
               {s.key === 'gallery' && (
+                <div className="space-y-2">
+                  <Label>Formato da galeria</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(Object.keys(GALLERY_LAYOUTS) as GalleryLayout[]).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => update((c) => ({ ...c, galleryLayout: k }))}
+                        className={cn(
+                          'rounded-xl border p-2.5 text-left transition',
+                          content.galleryLayout === k ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-border hover:border-slate-300'
+                        )}
+                      >
+                        <LayoutIcon layout={k} />
+                        <span className="mt-2 block text-sm font-semibold text-slate-900">{GALLERY_LAYOUTS[k].label}</span>
+                        <span className="block text-[11px] leading-snug text-slate-500">{GALLERY_LAYOUTS[k].hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {s.key === 'gallery' && (
                 <GalleryEditor
                   content={content}
                   update={update}
@@ -582,17 +627,26 @@ export default function ShowcaseEditorPage() {
               {s.key === 'menus' && (
                 menus.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    Você ainda não tem cardápios ativos. Cadastre em <Link href="/dashboard/menu" className="text-primary underline">Cardápio</Link>.
+                    Você ainda não tem cardápios ativos. Cadastre ou use um pronto em <Link href="/dashboard/menu" className="text-primary underline">Cardápios</Link>.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-sm text-slate-500">Marque quais mostrar. Sem nenhum marcado, todos os cardápios ativos aparecem.</p>
+                    <p className="text-sm text-slate-500">
+                      Marque quais mostrar. Sem nenhum marcado, todos os cardápios ativos aparecem.{' '}
+                      <Link href="/dashboard/menu" className="text-primary underline">Gerenciar cardápios</Link>
+                    </p>
                     {menus.map((m) => {
                       const on = content.menuIds.includes(m.id);
                       return (
                         <label key={m.id} className={cn('flex items-center gap-3 rounded-xl border p-3 cursor-pointer', on ? 'border-primary bg-primary/5' : 'border-border')}>
                           <input type="checkbox" checked={on} className="size-5 accent-[var(--primary)]"
                             onChange={() => update((c) => ({ ...c, menuIds: on ? c.menuIds.filter((x) => x !== m.id) : [...c.menuIds, m.id] }))} />
+                          {m.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={m.image} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
+                          ) : (
+                            <span className="size-12 shrink-0 rounded-lg bg-slate-100" />
+                          )}
                           <span className="min-w-0">
                             <span className="block font-medium text-slate-900 truncate">{m.name}</span>
                             <span className="block text-xs text-slate-500">{m.items.length} itens</span>
@@ -864,6 +918,77 @@ function ImageField({
           {!small && <span className="text-sm font-medium">{busy ? 'Enviando...' : 'Escolher foto'}</span>}
         </button>
       )}
+    </div>
+  );
+}
+
+function LayoutIcon({ layout }: { layout: GalleryLayout }) {
+  const b = 'rounded-[3px] bg-slate-300';
+  if (layout === 'carrossel')
+    return (
+      <span className="flex h-10 items-center gap-1">
+        <span className={cn(b, 'h-6 w-2 opacity-60')} />
+        <span className={cn(b, 'h-10 flex-1 bg-primary/50')} />
+        <span className={cn(b, 'h-6 w-2 opacity-60')} />
+      </span>
+    );
+  if (layout === 'grade')
+    return (
+      <span className="grid h-10 grid-cols-3 gap-1">
+        {Array.from({ length: 6 }).map((_, i) => <span key={i} className={b} />)}
+      </span>
+    );
+  return (
+    <span className="grid h-10 grid-cols-3 gap-1">
+      <span className="flex flex-col gap-1"><span className={cn(b, 'h-6')} /><span className={cn(b, 'flex-1')} /></span>
+      <span className="flex flex-col gap-1"><span className={cn(b, 'h-3')} /><span className={cn(b, 'flex-1')} /></span>
+      <span className="flex flex-col gap-1"><span className={cn(b, 'flex-1')} /><span className={cn(b, 'h-4')} /></span>
+    </span>
+  );
+}
+
+function HeroSlides({
+  slides,
+  uploading,
+  disabled,
+  onAdd,
+  onChange,
+}: {
+  slides: string[];
+  uploading: string | null;
+  disabled: boolean;
+  onAdd: (files: FileList | null) => void;
+  onChange: (slides: string[]) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const progress = uploading?.startsWith('slides:') ? uploading.slice(7) : null;
+  return (
+    <div className="space-y-2">
+      <Label>Mais fotos na capa (carrossel)</Label>
+      <p className="text-xs text-slate-500">
+        Com 2 ou mais fotos, a capa vira um carrossel que troca sozinho a cada 5 segundos. {disabled && slides.length === 0 && 'Escolha primeiro a foto principal.'}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {slides.map((u, i) => (
+          <div key={u} className="relative size-20 overflow-hidden rounded-lg border border-border">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={u} alt="" className="size-full object-cover" />
+            <button type="button" aria-label="Remover foto da capa" onClick={() => onChange(slides.filter((_, k) => k !== i))}
+              className="absolute right-1 top-1 size-7 rounded-full bg-white/90 text-destructive shadow flex items-center justify-center">
+              <X className="size-3.5" />
+            </button>
+          </div>
+        ))}
+        {slides.length < L.heroSlides && (
+          <button type="button" onClick={() => ref.current?.click()} disabled={disabled}
+            className="size-20 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-1 text-xs text-slate-500 hover:text-primary disabled:opacity-50">
+            {progress ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}
+            {progress ? progress.replace('/', ' de ') : 'Adicionar'}
+          </button>
+        )}
+      </div>
+      <input ref={ref} type="file" accept="image/*" multiple className="hidden"
+        onChange={(e) => { onAdd(e.target.files); e.target.value = ''; }} />
     </div>
   );
 }
