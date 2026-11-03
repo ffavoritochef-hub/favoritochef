@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminClient } from '@/lib/server-supabase';
 import { DEFAULT_COLOR, computeAccess, safeColor } from '@/lib/tenant';
 import { calcGuestPricing, calcDeposit, isProposalExpired } from '@/lib/buffet-rules';
+import { maskCpf } from '@/lib/cpf';
 
 const BUDGET_SELECT =
   '*, event:events(*, client:clients(name, document, phone, whatsapp)), menu_templates(name, items:menu_template_items(custom_item_name, custom_quantity))';
@@ -65,10 +66,73 @@ export interface ProposalView {
   total: number;
   deposit: { percent: number; amount: number; balance: number };
   paymentConditions: string;
+  terms: string[];
+  /** Presente quando a proposta foi assinada eletronicamente. */
+  signature: { name: string; document: string; signedAt: string; code: string } | null;
+}
+
+/** Evidências completas da assinatura (só para o PDF; nunca no JSON público). */
+export interface SignatureEvidence {
+  name: string;
+  document: string;
+  email: string | null;
+  image: string | null;
+  signedAt: string;
+  ip: string | null;
+  userAgent: string | null;
+  hash: string;
+}
+
+/** Conteúdo congelado no aceite: tudo da proposta, sem status/resposta/assinatura. */
+export type ProposalSnapshot = Omit<ProposalView, 'token' | 'status' | 'respondedAt' | 'signature'>;
+
+export function toSnapshot(v: ProposalView): ProposalSnapshot {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { token, status, respondedAt, signature, ...rest } = v;
+  return rest;
+}
+
+/** Código curto de verificação exibido ao cliente (início do hash). */
+export const signatureCode = (hash: string) => String(hash || '').slice(0, 12).toUpperCase();
+
+export function signatureEvidence(b: any): SignatureEvidence | null {
+  if (!b?.signed_at || !b.signer_name) return null;
+  return {
+    name: b.signer_name,
+    document: b.signer_document ?? '',
+    email: b.signer_email ?? null,
+    image: b.signature_image ?? null,
+    signedAt: b.signed_at,
+    ip: b.signer_ip ?? null,
+    userAgent: b.signer_user_agent ?? null,
+    hash: b.signed_content_hash ?? '',
+  };
+}
+
+export function proposalTerms(validUntil: string | null): string[] {
+  const until = validUntil ? new Date(validUntil + 'T12:00:00').toLocaleDateString('pt-BR') : 'a data informada pelo buffet';
+  return [
+    'A data só é reservada após o pagamento do sinal.',
+    'Em caso de cancelamento, o sinal não é reembolsável.',
+    'O número final de convidados deve ser confirmado até 7 dias antes do evento.',
+    `Proposta válida até ${until}.`,
+  ];
 }
 
 /** Visão pública: NUNCA inclui custos internos nem margem. */
 export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND): ProposalView {
+  const sig = signatureEvidence(b);
+  // assinada: devolve exatamente o que o cliente aceitou, mesmo que o orçamento mude depois
+  if (sig && b.signed_snapshot) {
+    return {
+      ...(b.signed_snapshot as ProposalSnapshot),
+      token: b.proposal_token,
+      status: 'aceita',
+      respondedAt: b.proposal_responded_at ?? sig.signedAt,
+      signature: { name: sig.name, document: maskCpf(sig.document), signedAt: sig.signedAt, code: signatureCode(sig.hash) },
+    };
+  }
+
   const ev = b.event ?? {};
   let lines: { label: string; value: number }[] = [];
   let total = Number(b.total_value) || 0;
@@ -138,6 +202,8 @@ export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND):
     total,
     deposit: { percent: dep.percent, amount: dep.deposit, balance: dep.balance },
     paymentConditions: b.payment_conditions || 'A combinar com a gerência do buffet.',
+    terms: proposalTerms(b.proposal_valid_until ?? null),
+    signature: null,
   };
 }
 

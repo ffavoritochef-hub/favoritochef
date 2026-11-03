@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isUuid, publicBaseUrl, requireUser } from '@/lib/server-supabase';
-import { buildProposalView, loadBrand, loadLatestBudgetByEvent } from '@/lib/proposal';
+import { buildProposalView, loadBrand, loadLatestBudgetByEvent, signatureEvidence } from '@/lib/proposal';
 import { buildProposalPdf } from '@/lib/proposal-pdf';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ eventId:
     const download = new URL(req.url).searchParams.get('download') === 'true';
     const { brand } = await loadBrand(budget.tenant_id, auth.db);
     const view = buildProposalView(budget, brand);
-    const pdf = await buildProposalPdf(view, `${publicBaseUrl(req)}/proposta/${budget.proposal_token}`);
+    const pdf = await buildProposalPdf(view, `${publicBaseUrl(req)}/proposta/${budget.proposal_token}`, view.signature ? signatureEvidence(budget) : null);
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         'Content-Type': 'application/pdf',

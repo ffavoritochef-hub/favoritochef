@@ -109,9 +109,9 @@ export default function BudgetsPage() {
     aceita: { text: 'Aceita', cls: 'bg-success/10 text-success border-success/30' },
     recusada: { text: 'Recusada', cls: 'bg-destructive/10 text-destructive border-destructive/30' },
   };
-  const ProposalBadge = ({ status, validUntil }: { status?: string; validUntil?: string | null }) => {
+  const ProposalBadge = ({ status, validUntil, signed }: { status?: string; validUntil?: string | null; signed?: boolean }) => {
     const key = status || 'rascunho';
-    const text = proposalLabel[key]?.text ?? 'Rascunho';
+    const text = key === 'aceita' && signed ? 'Assinada' : proposalLabel[key]?.text ?? 'Rascunho';
     if (key === 'enviada' && validUntil && new Date(validUntil + 'T23:59:59') < new Date()) {
       return <span className="inline-block text-[11px] px-2.5 py-0.5 rounded-full border font-semibold bg-warning/10 text-warning border-warning/40">Expirada</span>;
     }
@@ -174,7 +174,7 @@ export default function BudgetsPage() {
                 
                 <div className="border-t border-slate-100 pt-3 mt-3 space-y-3">
                   <div>
-                    <ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} />
+                    <ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} signed={!!budget.signed_at} />
                     <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mt-2">Valor Total</p>
                     <p className="text-xl sm:text-2xl font-bold text-primary break-words">
                       R$ {Number(budget.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -269,7 +269,7 @@ export default function BudgetsPage() {
                       }`}>
                         {budget.events?.status}
                       </span>
-                      <div className="mt-1.5"><ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} /></div>
+                      <div className="mt-1.5"><ProposalBadge status={budget.proposal_status} validUntil={budget.proposal_valid_until} signed={!!budget.signed_at} /></div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end items-center gap-2">

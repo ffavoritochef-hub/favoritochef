@@ -13,11 +13,15 @@ import {
   XCircle,
   AlertTriangle,
   Loader2,
+  ShieldCheck,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatBRL } from '@/lib/buffet-rules';
 import type { ProposalView } from '@/lib/proposal';
 import { darken } from '@/lib/tenant';
+import { formatCpf, isValidCpf } from '@/lib/cpf';
+import { SignaturePad } from '@/components/SignaturePad';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +36,10 @@ export default function PublicProposalPage() {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'idle' | 'accept' | 'decline'>('idle');
   const [note, setNote] = useState('');
+  const [signer, setSigner] = useState({ name: '', document: '', email: '' });
+  const [signature, setSignature] = useState<string | null>(null);
+  const [agree, setAgree] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -40,6 +48,7 @@ export default function PublicProposalPage() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Proposta não encontrada.');
         setView(json);
+        setSigner((s) => ({ ...s, name: s.name || json.clientName || '' }));
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -48,21 +57,40 @@ export default function PublicProposalPage() {
     })();
   }, [token]);
 
+  function validateSigner(): string | null {
+    if (signer.name.trim().split(/\s+/).length < 2) return 'Informe seu nome completo.';
+    if (!isValidCpf(signer.document)) return 'CPF inválido. Confira os números.';
+    if (signer.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signer.email.trim())) return 'E-mail inválido.';
+    if (!signature) return 'Desenhe sua assinatura no quadro.';
+    if (!agree) return 'Marque que você leu e concorda com os termos.';
+    return null;
+  }
+
   async function respond(action: 'accept' | 'decline') {
+    if (action === 'accept') {
+      const msg = validateSigner();
+      setFormError(msg);
+      if (msg) return;
+    }
     setBusy(true);
     setError(null);
+    setFormError(null);
     try {
       const res = await fetch(`/api/public/proposals/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, note }),
+        body: JSON.stringify(
+          action === 'accept' ? { action, note, signer: { ...signer, signature, agree } } : { action, note }
+        ),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Não foi possível registrar sua resposta.');
       setView(json);
       setMode('idle');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e: any) {
-      setError(e.message);
+      if (action === 'accept') setFormError(e.message);
+      else setError(e.message);
     } finally {
       setBusy(false);
     }
@@ -114,8 +142,15 @@ export default function PublicProposalPage() {
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 -mt-4 space-y-4 sm:space-y-5">
         {view.status === 'aceita' && (
-          <Banner tone="success" icon={<CheckCircle2 className="size-5" />} title="Proposta aceita!">
-            Obrigado, {view.clientName.split(' ')[0]}! O buffet entrará em contato para combinar o pagamento do sinal e garantir a sua data.
+          <Banner tone="success" icon={<CheckCircle2 className="size-5" />} title={view.signature ? 'Proposta assinada!' : 'Proposta aceita!'}>
+            Obrigado, {(view.signature?.name || view.clientName).split(' ')[0]}! O buffet entrará em contato para combinar o pagamento do sinal e garantir a sua data.
+            {view.signature && (
+              <span className="block mt-2 text-xs text-slate-600">
+                Assinado eletronicamente por {view.signature.name} (CPF {view.signature.document}) em{' '}
+                {new Date(view.signature.signedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.
+                Código de verificação: <strong className="font-mono">{view.signature.code}</strong>
+              </span>
+            )}
           </Banner>
         )}
         {view.status === 'recusada' && (
@@ -195,9 +230,20 @@ export default function PublicProposalPage() {
           )}
         </section>
 
+        {view.terms.length > 0 && (
+          <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
+            <h3 className="font-bold text-slate-900 mb-3">Termos e condições</h3>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-600">
+              {view.terms.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <Button asChild variant="outline" className="w-full h-12 rounded-xl border-primary/30 text-primary font-semibold">
           <a href={`/api/public/proposals/${token}/pdf?download=true`}>
-            <FileDown className="size-5" /> Baixar PDF da proposta
+            <FileDown className="size-5" /> {view.signature ? 'Baixar proposta assinada (PDF)' : 'Baixar PDF da proposta'}
           </a>
         </Button>
       </main>
@@ -214,23 +260,19 @@ export default function PublicProposalPage() {
                   Recusar
                 </Button>
                 <Button className="h-12 rounded-xl sm:flex-[2] bg-success hover:bg-success/90 text-white font-bold" onClick={() => setMode('accept')}>
-                  Aceitar proposta
+                  Aceitar e assinar
                 </Button>
               </div>
             )}
-            {mode !== 'idle' && (
+            {mode === 'decline' && (
               <>
-                <p className="text-sm text-slate-700">
-                  {mode === 'accept'
-                    ? `Confirmar aceite de ${formatBRL(view.total)}? O buffet entrará em contato para o sinal.`
-                    : 'Quer nos contar o motivo? (opcional)'}
-                </p>
+                <p className="text-sm text-slate-700">Quer nos contar o motivo? (opcional)</p>
                 <textarea
                   rows={2}
                   maxLength={500}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder={mode === 'accept' ? 'Observação para o buffet (opcional)' : 'Motivo da recusa'}
+                  placeholder="Motivo da recusa"
                   className="w-full rounded-xl border border-border px-3 py-2 text-[16px] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
                 />
                 <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
@@ -238,11 +280,11 @@ export default function PublicProposalPage() {
                     Voltar
                   </Button>
                   <Button
-                    className={`h-12 rounded-xl sm:flex-[2] text-white font-bold ${mode === 'accept' ? 'bg-success hover:bg-success/90' : 'bg-destructive hover:bg-destructive/90'}`}
+                    className="h-12 rounded-xl sm:flex-[2] text-white font-bold bg-destructive hover:bg-destructive/90"
                     disabled={busy}
-                    onClick={() => respond(mode)}
+                    onClick={() => respond('decline')}
                   >
-                    {busy ? 'Enviando...' : mode === 'accept' ? 'Sim, aceitar' : 'Confirmar recusa'}
+                    {busy ? 'Enviando...' : 'Confirmar recusa'}
                   </Button>
                 </div>
               </>
@@ -250,6 +292,100 @@ export default function PublicProposalPage() {
           </div>
         </div>
       )}
+
+      {canRespond && mode === 'accept' && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="sign-title">
+          <div
+            className="bg-white w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-xl"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="sticky top-0 z-10 bg-white border-b border-border px-5 py-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 id="sign-title" className="font-bold text-slate-900">Aceitar e assinar</h2>
+                <p className="text-xs text-slate-500">{view.event.name} · {formatBRL(view.total)}</p>
+              </div>
+              <button type="button" onClick={() => setMode('idle')} disabled={busy} className="p-2 -mr-2 text-slate-500 hover:text-slate-800" aria-label="Fechar">
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              <Field label="Nome completo">
+                <input
+                  value={signer.name}
+                  onChange={(e) => setSigner({ ...signer, name: e.target.value })}
+                  autoComplete="name"
+                  maxLength={120}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="CPF">
+                <input
+                  value={signer.document}
+                  onChange={(e) => setSigner({ ...signer, document: formatCpf(e.target.value) })}
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="E-mail (opcional)">
+                <input
+                  type="email"
+                  value={signer.email}
+                  onChange={(e) => setSigner({ ...signer, email: e.target.value })}
+                  autoComplete="email"
+                  maxLength={160}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Sua assinatura">
+                <SignaturePad onChange={setSignature} />
+              </Field>
+              <Field label="Observação para o buffet (opcional)">
+                <textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} className={inputCls} />
+              </Field>
+
+              <label className="flex items-start gap-3 rounded-xl bg-slate-50 border border-border p-3 text-sm text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 size-5 accent-[var(--primary)] shrink-0" />
+                <span>
+                  Li e concordo com os valores, o cardápio e os <strong>termos e condições</strong> desta proposta, no valor total de{' '}
+                  <strong>{formatBRL(view.total)}</strong>.
+                </span>
+              </label>
+
+              {formError && (
+                <p className="text-sm text-destructive font-medium" role="alert">
+                  {formError}
+                </p>
+              )}
+
+              <Button
+                className="w-full h-12 rounded-xl bg-success hover:bg-success/90 text-white font-bold"
+                disabled={busy}
+                onClick={() => respond('accept')}
+              >
+                {busy ? 'Assinando...' : 'Assinar e aceitar proposta'}
+              </Button>
+              <p className="flex items-start gap-2 text-xs text-slate-500">
+                <ShieldCheck className="size-4 shrink-0 mt-px" />
+                Registramos data, hora, IP e dispositivo como prova do aceite. Você poderá baixar a proposta assinada em PDF.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const inputCls =
+  'w-full rounded-xl border border-border px-3 py-2.5 text-[16px] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15';
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm font-semibold text-slate-800">{label}</p>
+      {children}
     </div>
   );
 }
