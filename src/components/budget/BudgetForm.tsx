@@ -8,10 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, Save, FileText, Calculator, ChefHat, Users, Wallet, AlertTriangle, HardHat } from 'lucide-react';
+import { ChevronLeft, Save, FileText, Calculator, ChefHat, Users, Wallet, AlertTriangle, HardHat, MessageSquareText, PlusCircle, X, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { calcGuestPricing, calcCostMargin, calcDeposit, formatBRL, suggestStaff } from '@/lib/buffet-rules';
+import { calcGuestPricing, calcCostMargin, calcDeposit, cleanExtraItems, formatBRL, suggestStaff, sumExtraItems, type ExtraItem } from '@/lib/buffet-rules';
+import { useTenant } from '@/contexts/TenantContext';
+import { DEFAULT_INCLUDED_ITEMS, DEFAULT_PROPOSAL_NOTES, defaultCoverMessage } from '@/lib/proposal-defaults';
 
 type Mode = 'por_convidado' | 'custo_margem';
 
@@ -26,7 +28,9 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
   const [proposalSent, setProposalSent] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [menuTemplates, setMenuTemplates] = useState<any[]>([]);
+  const [installments, setInstallments] = useState<{ description: string; due_date: string; percent: number | null; amount: number }[]>([]);
   const router = useRouter();
+  const { tenant } = useTenant();
 
   const [form, setForm] = useState({
     event_id: '',
@@ -46,13 +50,19 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
     transport_value: 0,
     margin_percent: 20,
     payment_conditions: '',
+    discount_per_person: 0,
+    discount_label: '',
+    extra_items: [] as ExtraItem[],
+    cover_message: '',
+    included_items: '',
+    proposal_notes: '',
   });
   const set = (patch: Partial<typeof form>) => setForm((p) => ({ ...p, ...patch }));
 
   useEffect(() => {
     (async () => {
       try {
-        const [eventsRes, templatesRes, budgetRes] = await Promise.all([
+        const [eventsRes, templatesRes, budgetRes, lastRes] = await Promise.all([
           supabase
             .from('events')
             .select('id, name, guest_count, status')
@@ -60,6 +70,11 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
             .order('name'),
           supabase.from('menu_templates').select('id, name, is_active').order('name'),
           budgetId ? supabase.from('budgets').select('*, events(id, name, guest_count, status)').eq('id', budgetId).maybeSingle() : Promise.resolve(null),
+          // orçamento novo reaproveita os textos do último orçamento
+          budgetId
+            ? Promise.resolve(null)
+            : supabase.from('budgets').select('cover_message, included_items, proposal_notes')
+                .order('created_at', { ascending: false }).limit(1).maybeSingle(),
         ]);
         const evs = eventsRes.data || [];
         const b = budgetRes && 'data' in budgetRes ? budgetRes.data : null;
@@ -90,10 +105,24 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
             staff_value: Number(b.staff_value) || 0,
             location_value: Number(b.location_value) || 0,
             transport_value: Number(b.transport_value) || 0,
-            margin_percent: costSum > 0 ? Math.round(((total / costSum - 1) * 100) * 100) / 100 : 20,
+            margin_percent: costSum > 0 ? Math.round((((total - sumExtraItems(cleanExtraItems(b.extra_items))) / costSum - 1) * 100) * 100) / 100 : 20,
             payment_conditions: b.payment_conditions || '',
+            discount_per_person: Number(b.discount_per_person) || 0,
+            discount_label: b.discount_label || '',
+            extra_items: cleanExtraItems(b.extra_items),
+            cover_message: b.cover_message || '',
+            included_items: b.included_items || '',
+            proposal_notes: b.proposal_notes || '',
           });
           setProposalSent(b.proposal_status === 'enviada' || b.proposal_status === 'aceita');
+        } else {
+          const last = lastRes && 'data' in lastRes ? lastRes.data : null;
+          setForm((p) => ({
+            ...p,
+            cover_message: last?.cover_message || defaultCoverMessage(tenant?.name || '', tenant?.responsible_name),
+            included_items: last?.included_items || DEFAULT_INCLUDED_ITEMS,
+            proposal_notes: last?.proposal_notes || DEFAULT_PROPOSAL_NOTES,
+          }));
         }
       } catch (error) {
         console.error('Erro ao buscar dados iniciais:', error);
@@ -104,8 +133,20 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgetId]);
 
+  // parcelas do cronograma do evento escolhido
+  useEffect(() => {
+    if (!form.event_id) return;
+    supabase
+      .from('event_installments')
+      .select('description, due_date, percent, amount')
+      .eq('event_id', form.event_id)
+      .order('due_date')
+      .then(({ data }) => setInstallments(data || []));
+  }, [form.event_id]);
+
   const costs = [form.food_value, form.drinks_value, form.staff_value, form.location_value, form.transport_value];
   const costTotal = costs.reduce((a, b) => a + b, 0);
+  const extraSum = sumExtraItems(cleanExtraItems(form.extra_items));
 
   const calc = useMemo(() => {
     if (form.pricing_mode === 'por_convidado') {
@@ -115,14 +156,16 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
         pricePerAdult: form.price_per_adult,
         childDiscountPercent: form.child_discount_percent,
         minTotal: form.min_total,
-        extras: form.extras_value,
+        extras: form.extras_value + extraSum,
+        discountPerPerson: form.discount_per_person,
       });
       return { total: p.total, pricing: p };
     }
-    return { total: calcCostMargin(costs, form.margin_percent).total, pricing: null };
+    return { total: calcCostMargin(costs, form.margin_percent).total + extraSum, pricing: null };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form]);
 
+  const installmentsTotal = installments.reduce((a, i) => a + Number(i.amount), 0);
   const profit = calc.total - costTotal;
   const marginReal = calc.total > 0 ? (profit / calc.total) * 100 : 0;
   const deposit = calcDeposit(calc.total, form.deposit_percent);
@@ -163,6 +206,12 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
         transport_value: form.transport_value,
         total_value: calc.total,
         payment_conditions: form.payment_conditions,
+        discount_per_person: form.pricing_mode === 'por_convidado' ? form.discount_per_person : 0,
+        discount_label: form.discount_label.trim() || null,
+        extra_items: cleanExtraItems(form.extra_items),
+        cover_message: form.cover_message.trim() || null,
+        included_items: form.included_items.trim() || null,
+        proposal_notes: form.proposal_notes.trim() || null,
       };
       const { error } = budgetId
         ? await supabase.from('budgets').update(row).eq('id', budgetId)
@@ -299,6 +348,13 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
                   </div>
                   {money('Valor mínimo de contratação (R$)', 'min_total', 'Se o total por convidado ficar abaixo, cobra o mínimo.')}
                   {money('Extras: locação, estrutura, logística (R$)', 'extras_value')}
+                  {money('Desconto por pessoa (R$)', 'discount_per_person', guests > 0 && form.discount_per_person > 0
+                    ? `Desconto total: ${formatBRL(calc.pricing?.discount ?? 0)} (${guests} pessoas).` : 'Ex: R$ 20,00 por pessoa de desconto.')}
+                  <div className="field-group">
+                    <Label>Motivo do desconto</Label>
+                    <Input value={form.discount_label} maxLength={60} placeholder="Ex: Indicação"
+                      onChange={(e) => set({ discount_label: e.target.value })} />
+                  </div>
                 </div>
               ) : (
                 <div className="field-group sm:max-w-xs">
@@ -308,6 +364,30 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
                   <p className="text-xs text-slate-500 mt-1.5">Aplicada sobre a soma dos custos abaixo.</p>
                 </div>
               )}
+
+              <div className="space-y-3 border-t border-slate-100 pt-5">
+                <div>
+                  <Label>Itens adicionais</Label>
+                  <p className="text-xs text-slate-500 mt-1">Cobrados à parte e somados ao total. Ex: Entradas R$ 400,00.</p>
+                </div>
+                {form.extra_items.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input className="flex-1" value={item.label} maxLength={120} placeholder="Descrição"
+                      onChange={(e) => set({ extra_items: form.extra_items.map((x, i) => (i === idx ? { ...x, label: e.target.value } : x)) })} />
+                    <Input className="w-32 sm:w-40" type="number" inputMode="decimal" step="0.01" min="0" value={item.value || ''} placeholder="0,00"
+                      onChange={(e) => set({ extra_items: form.extra_items.map((x, i) => (i === idx ? { ...x, value: num(e.target.value) } : x)) })} />
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Remover item" title="Remover item"
+                      className="shrink-0 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5"
+                      onClick={() => set({ extra_items: form.extra_items.filter((_, i) => i !== idx) })}>
+                      <X />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" className="h-11 rounded-xl border-dashed border-primary/30 text-primary hover:bg-primary/5"
+                  onClick={() => set({ extra_items: [...form.extra_items, { label: '', value: 0 }] })}>
+                  <PlusCircle className="size-4 mr-2" /> Adicionar item
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -326,8 +406,70 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
           </Card>
 
           <Card className="shadow-card border-border overflow-hidden bg-white">
+            <CardHeader className={headCls}><CardTitleIcon icon={MessageSquareText}>Textos da proposta</CardTitleIcon></CardHeader>
+            <CardContent className={bodyCls}>
+              <div className="field-group">
+                <Label>Mensagem de apresentação</Label>
+                <textarea rows={9} className={textareaCls} value={form.cover_message}
+                  onChange={(e) => set({ cover_message: e.target.value })} />
+                <p className="text-xs text-slate-500 mt-1.5">
+                  Abre a proposta e vai junto no WhatsApp. Escreva <strong>{'{cliente}'}</strong> onde entra o nome do cliente.
+                </p>
+              </div>
+              <div className="field-group">
+                <Label>O que está incluso</Label>
+                <textarea rows={5} className={textareaCls} value={form.included_items}
+                  placeholder={'Ex:\n1 Chef de cozinha, 1 ajudante e 2 churrasqueiros\n2 rechauds\n4 horas de evento'}
+                  onChange={(e) => set({ included_items: e.target.value })} />
+                <p className="text-xs text-slate-500 mt-1.5">Um item por linha.</p>
+              </div>
+              <div className="field-group">
+                <Label>Observações</Label>
+                <textarea rows={3} className={textareaCls} value={form.proposal_notes}
+                  placeholder="Ex: Horas adicionais serão cobradas a R$ 300,00."
+                  onChange={(e) => set({ proposal_notes: e.target.value })} />
+                <p className="text-xs text-slate-500 mt-1.5">Uma observação por linha.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-border overflow-hidden bg-white">
             <CardHeader className={headCls}><CardTitleIcon icon={Wallet}>Pagamento</CardTitleIcon></CardHeader>
             <CardContent className={bodyCls}>
+              {installments.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                    <CalendarClock className="size-4 text-primary" /> Parcelas do evento (vão na proposta)
+                  </p>
+                  <ul className="divide-y divide-border rounded-xl border border-border text-sm">
+                    {installments.map((i, idx) => (
+                      <li key={idx} className="flex justify-between gap-3 px-3 py-2">
+                        <span className="text-slate-700">
+                          {i.description} · {new Date(i.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          {i.percent ? ` · ${Number(i.percent).toLocaleString('pt-BR')}%` : ''}
+                        </span>
+                        <span className="font-semibold text-slate-900">{formatBRL(Number(i.amount))}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {Math.abs(installmentsTotal - calc.total) >= 0.01 && (
+                    <p className="text-xs text-warning font-medium">
+                      As parcelas somam {formatBRL(installmentsTotal)}, diferente do total da proposta.
+                    </p>
+                  )}
+                  <Link href={`/dashboard/events/${form.event_id}`} className="text-xs font-semibold text-primary hover:underline">
+                    Editar parcelas na página do evento
+                  </Link>
+                </div>
+              ) : (
+                form.event_id && (
+                  <p className="text-xs text-slate-500 rounded-xl bg-slate-50 border border-border p-3">
+                    Dica: defina as parcelas (data, % e valor) na{' '}
+                    <Link href={`/dashboard/events/${form.event_id}`} className="font-semibold text-primary hover:underline">página do evento</Link>{' '}
+                    para elas aparecerem na proposta. Sem parcelas, a proposta mostra o sinal abaixo.
+                  </p>
+                )
+              )}
               <div className="field-group sm:max-w-xs">
                 <Label>Sinal para reservar a data (%)</Label>
                 <Input type="number" inputMode="decimal" min="0" max="100" value={form.deposit_percent}
@@ -338,7 +480,7 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
                 <Label>Condições de pagamento</Label>
                 <textarea
                   rows={3}
-                  className="w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none"
+                  className={textareaCls}
                   placeholder="Ex: saldo via Pix até 3 dias antes do evento."
                   value={form.payment_conditions}
                   onChange={(e) => set({ payment_conditions: e.target.value })}
@@ -366,6 +508,8 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
                   {calc.pricing?.minApplied && <p className="text-xs text-warning font-medium">Valor mínimo aplicado</p>}
                 </div>
                 <dl className="space-y-2.5 text-sm border-t border-slate-100 pt-4">
+                  {(calc.pricing?.discount ?? 0) > 0 && <Row l="Desconto" v={`− ${formatBRL(calc.pricing?.discount ?? 0)}`} />}
+                  {extraSum > 0 && <Row l="Itens adicionais" v={formatBRL(extraSum)} />}
                   <Row l={`Sinal (${deposit.percent}%)`} v={formatBRL(deposit.deposit)} />
                   <Row l="Saldo" v={formatBRL(deposit.balance)} />
                   <Row l="Custo interno" v={formatBRL(costTotal)} />
@@ -400,6 +544,9 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
     </div>
   );
 }
+
+const textareaCls =
+  'w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none';
 
 function Row({ l, v, tone }: { l: string; v: string; tone?: 'ok' | 'bad' }) {
   return (

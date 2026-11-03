@@ -14,7 +14,11 @@ function whatsappLink(client: any, message: string): string | null {
 }
 
 function buildMessage(view: ReturnType<typeof buildProposalView>, url: string) {
-  const d = view.event.date ? new Date(view.event.date + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+  // com texto de apresentação, ele vai na mensagem e o link vem no final
+  if (view.coverMessage) {
+    return `${view.coverMessage}\n\n📄 Veja a proposta completa e assine online:\n${url}`;
+  }
+  const d =view.event.date ? new Date(view.event.date + 'T12:00:00').toLocaleDateString('pt-BR') : '';
   return (
     `Olá ${view.clientName}! Aqui é do *${view.brand.name}*. Segue a proposta para o evento *${view.event.name}*` +
     `${d ? ` (${d})` : ''}.\n\nValor total: *${formatBRL(view.total)}*\n` +

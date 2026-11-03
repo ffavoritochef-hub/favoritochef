@@ -1,11 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { adminClient } from '@/lib/server-supabase';
 import { DEFAULT_COLOR, computeAccess, safeColor } from '@/lib/tenant';
-import { calcGuestPricing, calcDeposit, isProposalExpired } from '@/lib/buffet-rules';
+import { calcGuestPricing, calcDeposit, cleanExtraItems, isProposalExpired, sumExtraItems } from '@/lib/buffet-rules';
 import { maskCpf } from '@/lib/cpf';
+import { normalizeShowcase } from '@/lib/showcase';
 
 const BUDGET_SELECT =
-  '*, event:events(*, client:clients(name, document, phone, whatsapp)), menu_templates(name, items:menu_template_items(custom_item_name, custom_quantity))';
+  '*, event:events(*, client:clients(name, document, phone, whatsapp), installments:event_installments(description, due_date, percent, amount)), menu_templates(name, items:menu_template_items(custom_item_name, custom_quantity, section, position))';
+
+const GALLERY_MAX = 6;
 
 export async function loadBudgetByToken(token: string) {
   const { data, error } = await adminClient()
@@ -34,6 +37,13 @@ export interface ProposalBrand {
   name: string;
   logoUrl: string | null;
   color: string;
+  /** Campos abaixo não existem em propostas assinadas antes da 0013. */
+  tagline?: string;
+  document?: string | null;
+  phone?: string | null;
+  instagram?: string;
+  /** Fotos da galeria da vitrine. */
+  gallery?: string[];
 }
 
 export const DEFAULT_BRAND: ProposalBrand = { name: 'Buffet', logoUrl: null, color: DEFAULT_COLOR };
@@ -41,14 +51,28 @@ export const DEFAULT_BRAND: ProposalBrand = { name: 'Buffet', logoUrl: null, col
 /** Carrega a marca do buffet. `active` = buffet aprovado e dentro do prazo. */
 export async function loadBrand(tenantId: string | null | undefined, db?: SupabaseClient): Promise<{ brand: ProposalBrand; active: boolean }> {
   if (!tenantId) return { brand: DEFAULT_BRAND, active: false };
-  const { data } = await (db ?? adminClient())
-    .from('tenants')
-    .select('name, logo_url, primary_color, status, valid_until')
-    .eq('id', tenantId)
-    .maybeSingle();
+  const client = db ?? adminClient();
+  const [{ data }, { data: showcase }] = await Promise.all([
+    client
+      .from('tenants')
+      .select('name, logo_url, primary_color, status, valid_until, document, phone')
+      .eq('id', tenantId)
+      .maybeSingle(),
+    client.from('tenant_showcase').select('content').eq('tenant_id', tenantId).maybeSingle(),
+  ]);
   if (!data) return { brand: DEFAULT_BRAND, active: false };
+  const content = showcase ? normalizeShowcase(showcase.content, data.name) : null;
   return {
-    brand: { name: data.name || 'Buffet', logoUrl: data.logo_url ?? null, color: safeColor(data.primary_color) },
+    brand: {
+      name: data.name || 'Buffet',
+      logoUrl: data.logo_url ?? null,
+      color: safeColor(data.primary_color),
+      tagline: content?.hero.subtitle || '',
+      document: data.document ?? null,
+      phone: data.phone ?? null,
+      instagram: content?.contact.instagram || '',
+      gallery: (content?.gallery ?? []).map((g) => g.url).slice(0, GALLERY_MAX),
+    },
     active: computeAccess({ status: data.status, valid_until: data.valid_until }, false) === 'ativo',
   };
 }
@@ -60,13 +84,19 @@ export interface ProposalView {
   validUntil: string | null;
   respondedAt: string | null;
   clientName: string;
-  event: { name: string; date: string; start: string; end: string; address: string; guests: number };
-  menu: { name: string; items: { name: string; quantity: string }[] };
+  event: { name: string; type?: string; date: string; start: string; end: string; address: string; guests: number };
+  menu: { name: string; items: { name: string; quantity: string; section?: string }[] };
   lines: { label: string; value: number }[];
   total: number;
   deposit: { percent: number; amount: number; balance: number };
   paymentConditions: string;
   terms: string[];
+  /** Campos abaixo não existem em propostas assinadas antes da 0013. */
+  coverMessage?: string;
+  included?: string[];
+  notes?: string[];
+  /** Parcelas combinadas (cronograma do evento). Vazio = vale o sinal. */
+  installments?: { description: string; dueDate: string; percent: number | null; amount: number }[];
   /** Presente quando a proposta foi assinada eletronicamente. */
   signature: { name: string; document: string; signedAt: string; code: string } | null;
 }
@@ -136,6 +166,8 @@ export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND):
   const ev = b.event ?? {};
   let lines: { label: string; value: number }[] = [];
   let total = Number(b.total_value) || 0;
+  const extraItems = cleanExtraItems(b.extra_items);
+  const extraSum = sumExtraItems(extraItems);
 
   if (b.pricing_mode === 'custo_margem') {
     const parts: [string, number][] = [
@@ -146,10 +178,11 @@ export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND):
       ['Transporte e logística', Number(b.transport_value) || 0],
     ];
     const sub = parts.reduce((a, [, v]) => a + v, 0);
+    const base = Math.max(0, total - extraSum);
     // distribui o total proporcionalmente para não expor a margem
     lines = parts
       .filter(([, v]) => v > 0)
-      .map(([label, v]) => ({ label, value: Math.round(((sub > 0 ? v / sub : 0) * total) * 100) / 100 }));
+      .map(([label, v]) => ({ label, value: Math.round(((sub > 0 ? v / sub : 0) * base) * 100) / 100 }));
   } else {
     const p = calcGuestPricing({
       adults: b.adult_count,
@@ -157,20 +190,30 @@ export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND):
       pricePerAdult: Number(b.price_per_adult),
       childDiscountPercent: Number(b.child_discount_percent),
       minTotal: Number(b.min_total),
-      extras: Number(b.extras_value),
+      extras: (Number(b.extras_value) || 0) + extraSum,
+      discountPerPerson: Number(b.discount_per_person) || 0,
     });
     if (b.adult_count > 0)
       lines.push({ label: `Adultos (${b.adult_count} × ${fmt(Number(b.price_per_adult))})`, value: p.adultsSubtotal });
     if (b.child_count > 0)
       lines.push({ label: `Crianças (${b.child_count} × ${fmt(p.pricePerChild)})`, value: p.childrenSubtotal });
+    if (p.discount > 0) {
+      const people = (Number(b.adult_count) || 0) + (Number(b.child_count) || 0);
+      const reason = String(b.discount_label || '').trim();
+      lines.push({
+        label: `Desconto${reason ? ` (${reason})` : ''}: ${fmt(Number(b.discount_per_person))} × ${people} pessoas`,
+        value: -p.discount,
+      });
+    }
     if (p.minApplied)
       lines.push({
         label: 'Complemento ao valor mínimo de contratação',
-        value: Math.round((Number(b.min_total) - p.guestsSubtotal) * 100) / 100,
+        value: Math.round((Number(b.min_total) - (p.guestsSubtotal - p.discount)) * 100) / 100,
       });
-    if (p.extras > 0) lines.push({ label: 'Locação, estrutura e logística', value: p.extras });
+    if (Number(b.extras_value) > 0) lines.push({ label: 'Locação, estrutura e logística', value: Number(b.extras_value) });
     total = p.total || total;
   }
+  lines.push(...extraItems);
 
   const dep = calcDeposit(total, Number(b.deposit_percent) || 0);
   let status = (b.proposal_status || 'rascunho') as ProposalView['status'];
@@ -185,6 +228,7 @@ export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND):
     clientName: ev.client?.name ?? '',
     event: {
       name: ev.name ?? '',
+      type: ev.type ?? '',
       date: ev.date ?? '',
       start: String(ev.start_time ?? '').slice(0, 5),
       end: String(ev.end_time ?? '').slice(0, 5),
@@ -193,18 +237,43 @@ export function buildProposalView(b: any, brand: ProposalBrand = DEFAULT_BRAND):
     },
     menu: {
       name: b.menu_templates?.name ?? 'Cardápio personalizado',
-      items: (b.menu_templates?.items ?? []).map((i: any) => ({
-        name: i.custom_item_name,
-        quantity: i.custom_quantity,
-      })),
+      items: [...(b.menu_templates?.items ?? [])]
+        .sort((x: any, y: any) => (Number(x.position) || 0) - (Number(y.position) || 0))
+        .map((i: any) => ({
+          name: i.custom_item_name,
+          quantity: i.custom_quantity ?? '',
+          section: i.section ?? '',
+        })),
     },
     lines,
     total,
     deposit: { percent: dep.percent, amount: dep.deposit, balance: dep.balance },
     paymentConditions: b.payment_conditions || 'A combinar com a gerência do buffet.',
     terms: proposalTerms(b.proposal_valid_until ?? null),
+    coverMessage: renderCoverMessage(b.cover_message, ev.client?.name ?? ''),
+    included: splitLines(b.included_items),
+    notes: splitLines(b.proposal_notes),
+    installments: [...(ev.installments ?? [])]
+      .sort((x: any, y: any) => String(x.due_date).localeCompare(String(y.due_date)))
+      .map((i: any) => ({
+        description: i.description || 'Parcela',
+        dueDate: i.due_date,
+        percent: i.percent == null ? null : Number(i.percent),
+        amount: Number(i.amount) || 0,
+      })),
     signature: null,
   };
+}
+
+const splitLines = (v: unknown) =>
+  String(v ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^[\s•\-*]+/, '').trim())
+    .filter(Boolean);
+
+/** {cliente} vira o nome do cliente. */
+export function renderCoverMessage(template: unknown, clientName: string) {
+  return String(template ?? '').replaceAll('{cliente}', clientName || 'cliente').trim();
 }
 
 function fmt(n: number) {

@@ -15,6 +15,8 @@ import {
   Loader2,
   ShieldCheck,
   X,
+  Check,
+  Phone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatBRL } from '@/lib/buffet-rules';
@@ -27,6 +29,20 @@ export const dynamic = 'force-dynamic';
 
 const dateBR = (d: string) =>
   d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : '';
+
+const shortDateBR = (d: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '');
+
+/** Agrupa os itens do cardápio pela seção, mantendo a ordem. */
+function groupBySection(items: ProposalView['menu']['items']) {
+  const groups: { title: string; items: ProposalView['menu']['items'] }[] = [];
+  for (const item of items) {
+    const title = item.section?.trim() || '';
+    const last = groups[groups.length - 1];
+    if (last && last.title === title) last.items.push(item);
+    else groups.push({ title, items: [item] });
+  }
+  return groups;
+}
 
 export default function PublicProposalPage() {
   const { token } = useParams() as { token: string };
@@ -136,6 +152,7 @@ export default function PublicProposalPage() {
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-widest text-white/70 font-semibold">Proposta comercial</p>
             <h1 className="text-xl sm:text-2xl font-bold truncate">{view.brand.name}</h1>
+            {view.brand.tagline && <p className="text-sm text-white/80 mt-0.5 line-clamp-2">{view.brand.tagline}</p>}
           </div>
         </div>
       </header>
@@ -169,12 +186,21 @@ export default function PublicProposalPage() {
           </Banner>
         )}
 
+        {view.coverMessage && (
+          <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
+            <p className="text-[15px] leading-relaxed text-slate-700 whitespace-pre-line">{view.coverMessage}</p>
+          </section>
+        )}
+
         <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6 space-y-4">
           <div>
             <p className="text-xs text-slate-500">Preparada para</p>
             <p className="text-lg font-bold text-slate-900">{view.clientName}</p>
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 leading-tight">{view.event.name}</h2>
+          <div>
+            {view.event.type && <p className="text-xs uppercase tracking-widest font-semibold text-primary">{view.event.type}</p>}
+            <h2 className="text-2xl font-bold text-slate-900 leading-tight">{view.event.name}</h2>
+          </div>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <Info icon={<Calendar className="size-4" />} text={dateBR(view.event.date)} />
             <Info icon={<Clock className="size-4" />} text={`${view.event.start} às ${view.event.end}`} />
@@ -186,17 +212,34 @@ export default function PublicProposalPage() {
         <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
           <h3 className="font-bold text-slate-900 mb-1">Cardápio</h3>
           <p className="text-primary font-semibold">{view.menu.name}</p>
-          {view.menu.items.length > 0 && (
-            <ul className="mt-3 divide-y divide-border text-sm">
-              {view.menu.items.map((i, idx) => (
-                <li key={idx} className="py-2 flex justify-between gap-3">
-                  <span className="text-slate-800">{i.name}</span>
-                  <span className="text-slate-500 shrink-0">{i.quantity}</span>
+          {groupBySection(view.menu.items).map((g, gi) => (
+            <div key={gi} className="mt-4">
+              {g.title && <h4 className="text-xs uppercase tracking-widest font-bold text-primary mb-1">{g.title}</h4>}
+              <ul className="divide-y divide-border text-sm">
+                {g.items.map((i, idx) => (
+                  <li key={idx} className="py-2 flex justify-between gap-3">
+                    <span className="text-slate-800">{i.name}</span>
+                    <span className="text-slate-500 shrink-0">{i.quantity}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+
+        {(view.included?.length ?? 0) > 0 && (
+          <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
+            <h3 className="font-bold text-slate-900 mb-3">O que está incluso</h3>
+            <ul className="space-y-2 text-sm">
+              {view.included!.map((t, i) => (
+                <li key={i} className="flex items-start gap-2.5 text-slate-700">
+                  <Check className="size-4 text-success shrink-0 mt-0.5" />
+                  <span>{t}</span>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </section>
+        )}
 
         <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
           <h3 className="font-bold text-slate-900 mb-3">Investimento</h3>
@@ -204,7 +247,9 @@ export default function PublicProposalPage() {
             {view.lines.map((l, i) => (
               <li key={i} className="py-2.5 flex justify-between gap-3">
                 <span className="text-slate-700">{l.label}</span>
-                <span className="font-semibold text-slate-900 shrink-0">{formatBRL(l.value)}</span>
+                <span className={`font-semibold shrink-0 ${l.value < 0 ? 'text-success' : 'text-slate-900'}`}>
+                  {l.value < 0 ? `− ${formatBRL(-l.value)}` : formatBRL(l.value)}
+                </span>
               </li>
             ))}
           </ul>
@@ -212,16 +257,35 @@ export default function PublicProposalPage() {
             <span className="font-semibold text-sm uppercase tracking-wide">Total</span>
             <span className="text-2xl font-black">{formatBRL(view.total)}</span>
           </div>
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="rounded-xl bg-slate-50 border border-border p-3">
-              <p className="text-slate-500 text-xs">Sinal ({view.deposit.percent}%) para reservar a data</p>
-              <p className="font-bold text-slate-900 text-lg">{formatBRL(view.deposit.amount)}</p>
+          {(view.installments?.length ?? 0) > 0 ? (
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-widest font-bold text-slate-500 mb-2">Forma de pagamento</p>
+              <ul className="divide-y divide-border rounded-xl border border-border text-sm">
+                {view.installments!.map((i, idx) => (
+                  <li key={idx} className="px-3 py-2.5 flex justify-between gap-3">
+                    <span className="text-slate-700">
+                      <span className="font-semibold text-slate-900">{i.description}</span>
+                      {' · '}
+                      {shortDateBR(i.dueDate)}
+                      {i.percent ? ` · ${i.percent.toLocaleString('pt-BR')}%` : ''}
+                    </span>
+                    <span className="font-semibold text-slate-900 shrink-0">{formatBRL(i.amount)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="rounded-xl bg-slate-50 border border-border p-3">
-              <p className="text-slate-500 text-xs">Saldo restante</p>
-              <p className="font-bold text-slate-900 text-lg">{formatBRL(view.deposit.balance)}</p>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="rounded-xl bg-slate-50 border border-border p-3">
+                <p className="text-slate-500 text-xs">Sinal ({view.deposit.percent}%) para reservar a data</p>
+                <p className="font-bold text-slate-900 text-lg">{formatBRL(view.deposit.amount)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 border border-border p-3">
+                <p className="text-slate-500 text-xs">Saldo restante</p>
+                <p className="font-bold text-slate-900 text-lg">{formatBRL(view.deposit.balance)}</p>
+              </div>
             </div>
-          </div>
+          )}
           <p className="mt-4 text-sm text-slate-600 whitespace-pre-line">{view.paymentConditions}</p>
           {view.validUntil && (
             <p className="mt-3 text-xs text-slate-500">
@@ -229,6 +293,29 @@ export default function PublicProposalPage() {
             </p>
           )}
         </section>
+
+        {(view.notes?.length ?? 0) > 0 && (
+          <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
+            <h3 className="font-bold text-slate-900 mb-3">Observações</h3>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-600">
+              {view.notes!.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {(view.brand.gallery?.length ?? 0) > 0 && (
+          <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
+            <h3 className="font-bold text-slate-900 mb-3">Nossos eventos</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {view.brand.gallery!.map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={url} alt="" loading="lazy" className="aspect-square w-full rounded-xl object-cover bg-slate-100" />
+              ))}
+            </div>
+          </section>
+        )}
 
         {view.terms.length > 0 && (
           <section className="bg-white rounded-2xl border border-border shadow-card p-5 sm:p-6">
@@ -246,6 +333,22 @@ export default function PublicProposalPage() {
             <FileDown className="size-5" /> {view.signature ? 'Baixar proposta assinada (PDF)' : 'Baixar PDF da proposta'}
           </a>
         </Button>
+
+        <footer className="text-center text-xs text-slate-500 space-y-1.5 pt-2 pb-4">
+          <p className="font-semibold text-slate-700">{view.brand.name}</p>
+          {view.brand.document && <p>CNPJ/CPF: {view.brand.document}</p>}
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+            {view.brand.phone && (
+              <span className="inline-flex items-center gap-1"><Phone className="size-3.5" />{view.brand.phone}</span>
+            )}
+            {view.brand.instagram && (
+              <a href={`https://instagram.com/${view.brand.instagram}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary font-semibold">
+                <InstagramIcon className="size-3.5" />@{view.brand.instagram}
+              </a>
+            )}
+          </div>
+        </footer>
       </main>
 
       {canRespond && (
@@ -414,5 +517,15 @@ function Banner({ tone, icon, title, children }: { tone: 'success' | 'warning' |
         <p className="mt-0.5">{children}</p>
       </div>
     </div>
+  );
+}
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
   );
 }

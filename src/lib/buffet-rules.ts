@@ -31,6 +31,7 @@ export interface GuestPricingInput {
   childDiscountPercent: number; // 0..100
   minTotal: number;
   extras: number; // locação, transporte, taxas etc.
+  discountPerPerson?: number; // R$ por pessoa (adultos + crianças)
 }
 
 export interface GuestPricingResult {
@@ -38,6 +39,7 @@ export interface GuestPricingResult {
   childrenSubtotal: number;
   pricePerChild: number;
   guestsSubtotal: number;
+  discount: number;
   minApplied: boolean;
   extras: number;
   total: number;
@@ -47,27 +49,48 @@ export function calcGuestPricing(i: GuestPricingInput): GuestPricingResult {
   const adults = Math.max(0, Math.floor(i.adults || 0));
   const children = Math.max(0, Math.floor(i.children || 0));
   const price = Math.max(0, i.pricePerAdult || 0);
-  const discount = Math.min(100, Math.max(0, i.childDiscountPercent || 0));
+  const childDiscount = Math.min(100, Math.max(0, i.childDiscountPercent || 0));
   const extras = Math.max(0, i.extras || 0);
   const minTotal = Math.max(0, i.minTotal || 0);
 
-  const pricePerChild = round2(price * (1 - discount / 100));
+  const pricePerChild = round2(price * (1 - childDiscount / 100));
   const adultsSubtotal = round2(adults * price);
   const childrenSubtotal = round2(children * pricePerChild);
   const guestsSubtotal = round2(adultsSubtotal + childrenSubtotal);
-  const minApplied = guestsSubtotal < minTotal;
-  const total = round2(Math.max(guestsSubtotal, minTotal) + extras);
+  const discount = Math.min(guestsSubtotal, round2(Math.max(0, i.discountPerPerson || 0) * (adults + children)));
+  const net = round2(guestsSubtotal - discount);
+  const minApplied = net < minTotal;
+  const total = round2(Math.max(net, minTotal) + extras);
 
   return {
     adultsSubtotal,
     childrenSubtotal,
     pricePerChild,
     guestsSubtotal,
+    discount,
     minApplied,
     extras,
     total,
   };
 }
+
+export interface ExtraItem {
+  label: string;
+  value: number;
+}
+
+/** Itens adicionais válidos (vêm de um JSONB editável). */
+export function cleanExtraItems(raw: unknown): ExtraItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((x) => ({
+      label: String((x as ExtraItem)?.label ?? '').trim().slice(0, 120),
+      value: round2(Math.max(0, Number((x as ExtraItem)?.value) || 0)),
+    }))
+    .filter((x) => x.label && x.value > 0);
+}
+
+export const sumExtraItems = (items: ExtraItem[]) => round2(items.reduce((a, x) => a + x.value, 0));
 
 /** Modo legado: soma dos custos + margem. */
 export function calcCostMargin(costs: number[], marginPercent: number) {
