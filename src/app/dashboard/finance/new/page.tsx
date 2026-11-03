@@ -21,6 +21,8 @@ import Link from 'next/link';
 export default function NewTransactionPage() {
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
+  // Evento de origem (?event_id=): ao salvar, volta para a página do evento.
+  const [returnEventId, setReturnEventId] = useState<string | null>(null);
   const router = useRouter();
   const [formData, setFormData] = useState({
     description: '',
@@ -38,11 +40,32 @@ export default function NewTransactionPage() {
       .eq('is_active', true)
       .order('date', { ascending: false });
     setEvents(data || []);
+
+    const params = new URLSearchParams(window.location.search);
+    const eventId = params.get('event_id');
+    const type = params.get('type');
+    const linked = (data || []).find((ev) => ev.id === eventId);
+    setFormData((prev) => ({
+      ...prev,
+      ...(type === 'payable' || type === 'receivable' ? { type } : {}),
+      ...(linked ? { event_id: linked.id, date: linked.date } : {}),
+    }));
+    if (linked) setReturnEventId(linked.id);
   }
 
   useEffect(() => {
     fetchEvents();
   }, []);
+
+  // Vincular a um evento usa a data do evento como data do lançamento.
+  function handleEventChange(val: string) {
+    const linked = events.find((ev) => ev.id === val);
+    setFormData((prev) => ({
+      ...prev,
+      event_id: val,
+      ...(linked ? { date: linked.date } : {}),
+    }));
+  }
 
   const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -55,12 +78,13 @@ export default function NewTransactionPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const another = (e.nativeEvent as SubmitEvent).submitter?.dataset.another === 'true';
     setLoading(true);
 
     try {
       const payload = {
         ...formData,
-        event_id: formData.event_id || null
+        event_id: formData.event_id && formData.event_id !== '0' ? formData.event_id : null
       };
 
       const { error } = await supabase
@@ -70,7 +94,13 @@ export default function NewTransactionPage() {
       if (error) throw error;
 
       toast.success('Transação registrada com sucesso!');
-      router.push('/dashboard/finance');
+      if (another) {
+        // Mantém tipo, evento, data e status para o próximo lançamento.
+        setFormData((prev) => ({ ...prev, description: '', amount: 0 }));
+        document.getElementById('desc')?.focus();
+        return;
+      }
+      router.push(returnEventId ? `/dashboard/events/${returnEventId}` : '/dashboard/finance');
     } catch (error: any) {
       toast.error('Erro ao registrar transação: ' + error.message);
     } finally {
@@ -206,7 +236,7 @@ export default function NewTransactionPage() {
                 </Label>
                 <Select
                   value={formData.event_id || ''}
-                  onValueChange={(val) => setFormData({ ...formData, event_id: val })}
+                  onValueChange={handleEventChange}
                 >
                   <SelectTrigger className="h-12 rounded-xl">
                     <SelectValue
@@ -232,6 +262,7 @@ export default function NewTransactionPage() {
                   {isReceivable
                     ? '💡 Ao vincular, este valor entra no cálculo do Lucro Real do evento (Recebido − Gastos).'
                     : '💡 Ao vincular, este valor é deduzido do valor fechado para calcular a rentabilidade do evento.'}
+                  {' '}A data do movimento passa a ser a data do evento (pode alterar).
                 </p>
               </div>
 
@@ -307,7 +338,16 @@ export default function NewTransactionPage() {
           </CardContent>
           <CardFooter className="bg-slate-50/60 border-t border-border px-5 sm:px-8 py-5 sm:py-6 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end sm:gap-4">
             <Button asChild variant="outline" className="w-full sm:w-auto h-12 border-slate-200 text-slate-700 hover:bg-slate-50">
-              <Link href="/dashboard/finance">Cancelar</Link>
+              <Link href={returnEventId ? `/dashboard/events/${returnEventId}` : '/dashboard/finance'}>Cancelar</Link>
+            </Button>
+            <Button
+              type="submit"
+              data-another="true"
+              variant="outline"
+              className="w-full sm:w-auto h-12 border-primary/30 text-primary hover:bg-primary/5 font-semibold"
+              disabled={loading}
+            >
+              Salvar e Lançar Outra
             </Button>
             <Button
               type="submit"

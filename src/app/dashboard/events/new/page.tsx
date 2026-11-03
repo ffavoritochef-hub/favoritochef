@@ -131,8 +131,8 @@ export default function NewEventPage() {
         if (linkErr) throw linkErr;
       }
 
-      toast.success('Evento agendado com sucesso!');
-      router.push('/dashboard/events');
+      toast.success('Evento agendado! Defina agora o cronograma de pagamento.');
+      router.push(data?.[0]?.id ? `/dashboard/events/${data[0].id}` : '/dashboard/events');
     } catch (error: any) {
       toast.error('Erro ao agendar evento: ' + error.message);
     } finally {

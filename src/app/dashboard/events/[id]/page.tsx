@@ -55,6 +55,8 @@ import {
   Sparkles,
   UserCheck,
   DollarSign,
+  CalendarClock,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -96,6 +98,49 @@ type Payment = {
   register_in_finance: boolean;
 };
 
+type Installment = {
+  id: string;
+  description: string;
+  due_date: string;
+  percent: number | null;
+  amount: number;
+};
+
+type InstallmentDraft = {
+  description: string;
+  due_date: string;
+  percent: number;
+  amount: number;
+};
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Data local (YYYY-MM-DD); toISOString usaria UTC e viraria o dia à noite.
+function toISODate(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const todayISO = () => toISODate(new Date());
+
+function addMonthsISO(iso: string, months: number) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1 + months, 1);
+  const lastDay = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+  dt.setDate(Math.min(d, lastDay));
+  return toISODate(dt);
+}
+
+const formatDateBR = (iso: string) =>
+  new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
+
+const installmentStatusStyles: Record<string, string> = {
+  Pago: 'bg-success/10 text-success border-success/20',
+  Parcial: 'bg-primary/10 text-primary border-primary/20',
+  Vencida: 'bg-destructive/10 text-destructive border-destructive/20',
+  'A vencer': 'bg-warning/10 text-warning border-warning/20',
+};
+
 export default function EventDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -107,12 +152,17 @@ export default function EventDetailPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [installments, setInstallments] = useState<Installment[]>([]);
+
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleDrafts, setScheduleDrafts] = useState<InstallmentDraft[]>([]);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
 
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: 0,
-    payment_date: new Date().toISOString().split('T')[0],
+    payment_date: todayISO(),
     method: 'Pix',
     status: 'Recebido',
     notes: '',
@@ -150,7 +200,7 @@ export default function EventDetailPage() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [eventRes, paymentsRes, teamRes, expRes] = await Promise.all([
+      const [eventRes, paymentsRes, teamRes, expRes, instRes] = await Promise.all([
         supabase
           .from('events')
           .select('*, client:clients(name, phone, email)')
@@ -171,8 +221,14 @@ export default function EventDetailPage() {
           .eq('event_id', eventId)
           .eq('type', 'payable')
           .order('date', { ascending: false }),
+        supabase
+          .from('event_installments')
+          .select('*')
+          .eq('event_id', eventId)
+          .order('due_date', { ascending: true }),
       ]);
       if (eventRes.error) throw eventRes.error;
+      setInstallments((instRes.data as Installment[]) || []);
       setEvent(eventRes.data);
       setPayments((paymentsRes.data as Payment[]) || []);
       setEmployees((teamRes.data || []).map((l: any) => ({
@@ -215,14 +271,154 @@ export default function EventDetailPage() {
     };
   }, [event, payments, expenses]);
 
+  // Abate o total recebido das parcelas pela ordem de vencimento.
+  const schedule = useMemo(() => {
+    const today = todayISO();
+    let pool = totals.received;
+    return installments.map((i) => {
+      const amount = Number(i.amount || 0);
+      const paid = round2(Math.min(amount, Math.max(0, pool)));
+      pool -= paid;
+      const remaining = round2(amount - paid);
+      const status =
+        remaining <= 0
+          ? 'Pago'
+          : i.due_date < today
+          ? 'Vencida'
+          : paid > 0
+          ? 'Parcial'
+          : 'A vencer';
+      return { ...i, amount, paid, remaining, status };
+    });
+  }, [installments, totals.received]);
+
+  const nextInstallment = schedule.find((i) => i.remaining > 0);
+  const scheduleTotal = round2(
+    installments.reduce((acc, i) => acc + Number(i.amount || 0), 0)
+  );
+
+  const draftTotals = useMemo(() => {
+    const amount = round2(scheduleDrafts.reduce((acc, d) => acc + (d.amount || 0), 0));
+    const percent = round2(scheduleDrafts.reduce((acc, d) => acc + (d.percent || 0), 0));
+    return { amount, percent, diff: round2(totals.agreed - amount) };
+  }, [scheduleDrafts, totals.agreed]);
+
+  function openScheduleEditor() {
+    setScheduleDrafts(
+      installments.length > 0
+        ? installments.map((i) => ({
+            description: i.description,
+            due_date: i.due_date,
+            percent: Number(i.percent || 0),
+            amount: Number(i.amount || 0),
+          }))
+        : [{ description: 'Ato', due_date: todayISO(), percent: 0, amount: 0 }]
+    );
+    setScheduleDialogOpen(true);
+  }
+
+  function updateDraft(index: number, patch: Partial<InstallmentDraft>) {
+    setScheduleDrafts((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    );
+  }
+
+  function changeDraftPercent(index: number, percent: number) {
+    updateDraft(index, {
+      percent,
+      amount: totals.agreed > 0 ? round2((totals.agreed * percent) / 100) : 0,
+    });
+  }
+
+  function changeDraftAmount(index: number, amount: number) {
+    updateDraft(index, {
+      amount,
+      percent: totals.agreed > 0 ? round2((amount / totals.agreed) * 100) : 0,
+    });
+  }
+
+  // Nova parcela já vem com o saldo que falta e vencimento 1 mês após a anterior.
+  function addDraft() {
+    setScheduleDrafts((rows) => {
+      const last = rows[rows.length - 1];
+      const used = rows.reduce((acc, d) => acc + (d.amount || 0), 0);
+      const amount = Math.max(0, round2(totals.agreed - used));
+      return [
+        ...rows,
+        {
+          description: `${rows.length + 1}ª parcela`,
+          due_date: last?.due_date ? addMonthsISO(last.due_date, 1) : todayISO(),
+          amount,
+          percent: totals.agreed > 0 ? round2((amount / totals.agreed) * 100) : 0,
+        },
+      ];
+    });
+  }
+
+  function removeDraft(index: number) {
+    setScheduleDrafts((rows) => rows.filter((_, i) => i !== index));
+  }
+
+  async function handleScheduleSave() {
+    const rows = scheduleDrafts.filter((d) => d.amount > 0 || d.description.trim());
+    if (rows.some((d) => !d.due_date)) {
+      toast.error('Informe a data de todas as parcelas.');
+      return;
+    }
+    if (rows.some((d) => !(d.amount > 0))) {
+      toast.error('Informe o valor de todas as parcelas.');
+      return;
+    }
+    setScheduleSaving(true);
+    try {
+      const { error: delError } = await supabase
+        .from('event_installments')
+        .delete()
+        .eq('event_id', eventId);
+      if (delError) throw delError;
+      if (rows.length > 0) {
+        const { error } = await supabase.from('event_installments').insert(
+          rows.map((d) => ({
+            event_id: eventId,
+            description: d.description.trim() || 'Parcela',
+            due_date: d.due_date,
+            percent: d.percent || null,
+            amount: round2(d.amount),
+          }))
+        );
+        if (error) throw error;
+      }
+      toast.success('Cronograma de pagamento salvo.');
+      setScheduleDialogOpen(false);
+      await fetchAll();
+    } catch (error: any) {
+      toast.error(error.message || 'Falha ao salvar o cronograma.');
+    } finally {
+      setScheduleSaving(false);
+    }
+  }
+
   function openNewPayment() {
     setEditingPayment(null);
     setPaymentForm({
       amount: 0,
-      payment_date: new Date().toISOString().split('T')[0],
+      payment_date: todayISO(),
       method: 'Pix',
       status: 'Recebido',
       notes: '',
+      register_in_finance: true,
+    });
+    setPaymentDialogOpen(true);
+  }
+
+  function openInstallmentPayment(i: { description: string; remaining: number }) {
+    setEditingPayment(null);
+    setPaymentForm({
+      amount: i.remaining,
+      payment_date: todayISO(),
+      method: 'Pix',
+      status: 'Recebido',
+      notes: i.description,
       register_in_finance: true,
     });
     setPaymentDialogOpen(true);
@@ -570,12 +766,121 @@ export default function EventDetailPage() {
               <p className="text-[11px] mt-1 text-slate-500 font-semibold">
                 {totals.balance <= 0
                   ? 'Tudo recebido'
-                  : `${totals.agreed > 0 ? (totals.balance / totals.agreed) * 100 : 0}% do total`}
+                  : `${totals.agreed > 0 ? ((totals.balance / totals.agreed) * 100).toFixed(0) : 0}% do total`}
               </p>
+              {nextInstallment && (
+                <p
+                  className={`text-[11px] mt-1 font-semibold ${
+                    nextInstallment.status === 'Vencida' ? 'text-destructive' : 'text-slate-500'
+                  }`}
+                >
+                  {nextInstallment.status === 'Vencida' ? 'Vencida: ' : 'Próxima: '}
+                  {formatCurrency(nextInstallment.remaining)} em{' '}
+                  {formatDateBR(nextInstallment.due_date)}
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* CRONOGRAMA DE PAGAMENTO */}
+      <Card className="bg-white border-border shadow-card rounded-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
+                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <CalendarClock className="size-5" />
+                </span>
+                Cronograma de Pagamento
+              </CardTitle>
+              <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
+                Datas, percentuais e valores combinados com o cliente.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={openScheduleEditor}
+              className="h-12 border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl font-semibold px-5 w-full sm:w-auto flex items-center gap-2"
+            >
+              {installments.length > 0 ? (
+                <Pencil className="w-4.5 h-4.5" />
+              ) : (
+                <PlusCircle className="w-4.5 h-4.5" />
+              )}
+              {installments.length > 0 ? 'Editar Cronograma' : 'Definir Parcelas'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-8 py-5 sm:py-6">
+          {schedule.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center px-4">
+              <CalendarClock className="w-12 h-12 mb-3 text-primary/30" />
+              <p className="font-semibold text-slate-700">
+                Nenhuma parcela combinada.
+              </p>
+              <p className="text-xs sm:text-sm mt-2 max-w-md">
+                Clique em &quot;Definir Parcelas&quot; e informe quando o cliente vai
+                pagar. Ex.: Ato 10% {formatCurrency(totals.agreed * 0.1)}.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {schedule.map((i) => (
+                <div
+                  key={i.id}
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-border bg-white"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-slate-900 break-words">
+                        {i.description}
+                      </p>
+                      <Badge
+                        className={`rounded-full border font-bold uppercase tracking-wider text-[10px] px-2.5 py-1 ${
+                          installmentStatusStyles[i.status]
+                        }`}
+                      >
+                        {i.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-500 font-semibold mt-1">
+                      Vence em {formatDateBR(i.due_date)}
+                      {i.percent ? ` • ${Number(i.percent).toLocaleString('pt-BR')}%` : ''}
+                      {i.status === 'Parcial' || (i.status === 'Vencida' && i.paid > 0)
+                        ? ` • pago ${formatCurrency(i.paid)}, falta ${formatCurrency(i.remaining)}`
+                        : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-3">
+                    <span className="text-lg font-bold text-slate-900">
+                      {formatCurrency(i.amount)}
+                    </span>
+                    {i.remaining > 0 && (
+                      <Button
+                        type="button"
+                        onClick={() => openInstallmentPayment(i)}
+                        className="h-10 bg-success hover:bg-success/90 text-white rounded-xl font-semibold px-4 flex items-center gap-1.5"
+                      >
+                        <Banknote className="size-4" />
+                        Receber
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {Math.abs(totals.agreed - scheduleTotal) >= 0.01 && (
+                <p className="text-xs sm:text-sm font-semibold text-warning bg-warning/5 border border-warning/20 rounded-xl p-3">
+                  As parcelas somam {formatCurrency(scheduleTotal)}, mas o valor fechado é{' '}
+                  {formatCurrency(totals.agreed)}.
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* SEÇÃO PAGAMENTOS */}
       <Card className="bg-white border-border shadow-card rounded-2xl overflow-hidden">
@@ -959,7 +1264,7 @@ export default function EventDetailPage() {
               variant="outline"
               className="w-full h-11 rounded-xl font-semibold border-slate-200 text-slate-700 hover:bg-slate-50"
             >
-              <Link href="/dashboard/finance/new">
+              <Link href={`/dashboard/finance/new?type=payable&event_id=${eventId}`}>
                 <PlusCircle className="w-4.5 h-4.5 mr-2" />
                 Lançar Despesa para este Evento
               </Link>
@@ -1110,6 +1415,138 @@ export default function EventDetailPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG CRONOGRAMA */}
+      <Dialog
+        open={scheduleDialogOpen}
+        onOpenChange={(v) => {
+          if (scheduleSaving) return;
+          setScheduleDialogOpen(v);
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <CalendarClock className="w-5 h-5 text-primary" />
+              Cronograma de Pagamento
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500 pt-1">
+              Valor fechado: {formatCurrency(totals.agreed)}. Informe o % ou o valor de
+              cada parcela; o outro campo é calculado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 mt-2">
+            {scheduleDrafts.map((d, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-2 sm:grid-cols-12 gap-2 sm:gap-3 items-end p-3 rounded-xl border border-border bg-slate-50/40"
+              >
+                <div className="field-group col-span-2 sm:col-span-4">
+                  <Label htmlFor={`inst_desc_${index}`}>Descrição</Label>
+                  <Input
+                    id={`inst_desc_${index}`}
+                    placeholder="Ex: Ato, 2ª parcela"
+                    value={d.description}
+                    onChange={(e) => updateDraft(index, { description: e.target.value })}
+                  />
+                </div>
+                <div className="field-group col-span-2 sm:col-span-3">
+                  <Label htmlFor={`inst_date_${index}`}>Data</Label>
+                  <Input
+                    id={`inst_date_${index}`}
+                    type="date"
+                    value={d.due_date}
+                    onChange={(e) => updateDraft(index, { due_date: e.target.value })}
+                  />
+                </div>
+                <div className="field-group sm:col-span-2">
+                  <Label htmlFor={`inst_pct_${index}`}>%</Label>
+                  <Input
+                    id={`inst_pct_${index}`}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0"
+                    value={d.percent || ''}
+                    onChange={(e) => changeDraftPercent(index, parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="field-group sm:col-span-3">
+                  <Label htmlFor={`inst_amount_${index}`}>Valor (R$)</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      id={`inst_amount_${index}`}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      value={d.amount || ''}
+                      onChange={(e) => changeDraftAmount(index, parseFloat(e.target.value) || 0)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => removeDraft(index)}
+                      className="shrink-0 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/5"
+                      title="Remover parcela"
+                      aria-label="Remover parcela"
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addDraft}
+              className="w-full h-11 rounded-xl font-semibold border-dashed border-primary/30 text-primary hover:bg-primary/5"
+            >
+              <PlusCircle className="w-4.5 h-4.5 mr-2" />
+              Adicionar Parcela
+            </Button>
+
+            <div
+              className={`rounded-xl border p-3 text-sm font-semibold ${
+                Math.abs(draftTotals.diff) < 0.01
+                  ? 'border-success/30 bg-success/5 text-success'
+                  : 'border-warning/30 bg-warning/5 text-warning'
+              }`}
+            >
+              Total: {draftTotals.percent.toLocaleString('pt-BR')}% •{' '}
+              {formatCurrency(draftTotals.amount)}
+              {Math.abs(draftTotals.diff) >= 0.01 &&
+                (draftTotals.diff > 0
+                  ? ` — faltam ${formatCurrency(draftTotals.diff)} para o valor fechado`
+                  : ` — passa ${formatCurrency(-draftTotals.diff)} do valor fechado`)}
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto h-11 border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl"
+              onClick={() => setScheduleDialogOpen(false)}
+              disabled={scheduleSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleScheduleSave}
+              className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl"
+              disabled={scheduleSaving}
+            >
+              {scheduleSaving ? 'Salvando...' : 'Salvar Cronograma'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
