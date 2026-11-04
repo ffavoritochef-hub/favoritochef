@@ -18,12 +18,19 @@ import {
   MessageSquare,
   Eye,
   Pencil,
-  Trash2
+  Trash2,
+  PenLine
 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { authFetch, openProtectedPdf } from '@/lib/api-client';
 import Link from 'next/link';
+import { SignatureDetailsDialog } from '@/components/budget/SignatureDetailsDialog';
+
+// sem signature_image / signed_snapshot: são pesados e só a tela de detalhes usa
+const LIST_COLUMNS =
+  'id, event_id, total_value, created_at, proposal_status, proposal_valid_until, signed_at, ' +
+  'events(name, status, client:clients(name, whatsapp)), menu_templates(name)';
 
 const statusStyles: Record<string, string> = {
   'Orçamento enviado': 'bg-sky-600 text-white border-sky-600 rounded-full',
@@ -39,13 +46,17 @@ export default function BudgetsPage() {
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState<{ id: string; events?: { name?: string } | null } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [signatureOf, setSignatureOf] = useState<string | null>(null);
 
   async function confirmDelete() {
     if (!toDelete) return;
     setDeleting(true);
     const { error } = await supabase.from('budgets').delete().eq('id', toDelete.id);
     setDeleting(false);
-    if (error) return toast.error('Erro ao excluir: ' + error.message);
+    if (error) {
+      const signed = /assinad/i.test(error.message);
+      return toast.error(signed ? 'Este orçamento foi assinado pelo cliente e não pode ser excluído.' : 'Erro ao excluir: ' + error.message);
+    }
     toast.success('Orçamento excluído.');
     setToDelete(null);
     fetchBudgets();
@@ -60,7 +71,7 @@ export default function BudgetsPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('budgets')
-        .select('*, events(name, status, client:clients(name, whatsapp)), menu_templates(name)')
+        .select(LIST_COLUMNS)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -180,13 +191,24 @@ export default function BudgetsPage() {
                       R$ {Number(budget.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
-                  <Button
-                    className="w-full h-12 rounded-xl bg-success hover:bg-success/90 text-white font-semibold"
-                    onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
-                  >
-                    <MessageSquare />
-                    Enviar proposta no WhatsApp
-                  </Button>
+                  {budget.signed_at ? (
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 rounded-xl font-semibold border-success/40 text-success hover:bg-success/5"
+                      onClick={() => setSignatureOf(budget.id)}
+                    >
+                      <PenLine />
+                      Ver assinatura
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full h-12 rounded-xl bg-success hover:bg-success/90 text-white font-semibold"
+                      onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
+                    >
+                      <MessageSquare />
+                      Enviar proposta no WhatsApp
+                    </Button>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <Button variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700" onClick={() => handleViewPdf(budget.event_id)}>
                       <Eye />
@@ -196,16 +218,20 @@ export default function BudgetsPage() {
                       <Download />
                       Baixar PDF
                     </Button>
-                    <Button asChild variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700">
-                      <Link href={`/dashboard/budgets/${budget.id}/edit`}>
-                        <Pencil />
-                        Editar
-                      </Link>
-                    </Button>
-                    <Button variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700 hover:text-destructive" onClick={() => setToDelete(budget)}>
-                      <Trash2 />
-                      Excluir
-                    </Button>
+                    {!budget.signed_at && (
+                      <>
+                        <Button asChild variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700">
+                          <Link href={`/dashboard/budgets/${budget.id}/edit`}>
+                            <Pencil />
+                            Editar
+                          </Link>
+                        </Button>
+                        <Button variant="outline" className="h-11 rounded-xl font-semibold border-slate-200 text-slate-700 hover:text-destructive" onClick={() => setToDelete(budget)}>
+                          <Trash2 />
+                          Excluir
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -273,15 +299,28 @@ export default function BudgetsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end items-center gap-2">
-                      <Button
-                        size="sm"
-                        className="h-10 rounded-lg bg-success hover:bg-success/90 text-white font-semibold px-3.5"
-                        onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
-                        title="Enviar proposta por WhatsApp"
-                      >
-                        <MessageSquare />
-                        Enviar
-                      </Button>
+                      {budget.signed_at ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-10 rounded-lg border-success/40 text-success hover:bg-success/5 font-semibold px-3.5"
+                          onClick={() => setSignatureOf(budget.id)}
+                          title="Ver dados da assinatura"
+                        >
+                          <PenLine />
+                          Assinatura
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="h-10 rounded-lg bg-success hover:bg-success/90 text-white font-semibold px-3.5"
+                          onClick={() => handleWhatsApp(budget.event_id, budget.events?.client?.name, budget.events?.name)}
+                          title="Enviar proposta por WhatsApp"
+                        >
+                          <MessageSquare />
+                          Enviar
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="icon-sm"
@@ -302,25 +341,29 @@ export default function BudgetsPage() {
                       >
                         <Download />
                       </Button>
-                      <Button
-                        asChild
-                        variant="outline"
-                        size="icon-sm"
-                        className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-primary hover:bg-primary/5"
-                        title="Editar orçamento"
-                      >
-                        <Link href={`/dashboard/budgets/${budget.id}/edit`} aria-label="Editar orçamento"><Pencil /></Link>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-destructive hover:bg-destructive/5"
-                        onClick={() => setToDelete(budget)}
-                        title="Excluir orçamento"
-                        aria-label="Excluir orçamento"
-                      >
-                        <Trash2 />
-                      </Button>
+                      {!budget.signed_at && (
+                        <>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="icon-sm"
+                            className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-primary hover:bg-primary/5"
+                            title="Editar orçamento"
+                          >
+                            <Link href={`/dashboard/budgets/${budget.id}/edit`} aria-label="Editar orçamento"><Pencil /></Link>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            className="h-10 w-10 rounded-lg border-slate-200 text-slate-600 hover:text-destructive hover:bg-destructive/5"
+                            onClick={() => setToDelete(budget)}
+                            title="Excluir orçamento"
+                            aria-label="Excluir orçamento"
+                          >
+                            <Trash2 />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -340,6 +383,7 @@ export default function BudgetsPage() {
         loading={deleting}
         onConfirm={confirmDelete}
       />
+      <SignatureDetailsDialog budgetId={signatureOf} onClose={() => setSignatureOf(null)} />
     </div>
   );
 }

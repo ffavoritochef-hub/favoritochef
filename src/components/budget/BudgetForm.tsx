@@ -26,6 +26,8 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
   const [loading, setLoading] = useState(false);
   const [loadingBudget, setLoadingBudget] = useState(!!budgetId);
   const [proposalSent, setProposalSent] = useState(false);
+  // proposta assinada: o orçamento fica travado (o documento assinado é a cópia congelada)
+  const [signedAt, setSignedAt] = useState<string | null>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [menuTemplates, setMenuTemplates] = useState<any[]>([]);
   const [installments, setInstallments] = useState<{ description: string; due_date: string; percent: number | null; amount: number }[]>([]);
@@ -115,6 +117,7 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
             proposal_notes: b.proposal_notes || '',
           });
           setProposalSent(b.proposal_status === 'enviada' || b.proposal_status === 'aceita');
+          setSignedAt(b.signed_at || null);
         } else {
           const last = lastRes && 'data' in lastRes ? lastRes.data : null;
           setForm((p) => ({
@@ -180,6 +183,7 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (signedAt) return toast.error('Esta proposta já foi assinada pelo cliente e não pode ser alterada.');
     if (!form.event_id) return toast.error('Selecione o evento.');
     if (!(calc.total > 0)) return toast.error('O valor da proposta está zerado. Preencha os valores.');
     if (form.pricing_mode === 'por_convidado' && guests === 0) return toast.error('Informe o número de convidados.');
@@ -271,7 +275,12 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
         </div>
       </header>
 
-      {proposalSent && (
+      {signedAt ? (
+        <div className="rounded-xl border border-success/40 bg-success/10 px-4 py-3 text-sm text-slate-700">
+          <strong>Proposta assinada pelo cliente</strong> em {new Date(signedAt).toLocaleString('pt-BR')}. Este orçamento não pode
+          mais ser alterado: vale o que o cliente assinou.
+        </div>
+      ) : proposalSent && (
         <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-slate-700">
           A proposta deste orçamento já foi enviada ao cliente. Ao salvar, o link dele passa a mostrar os novos valores.
         </div>
@@ -487,7 +496,7 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
                 />
               </div>
               <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end sm:gap-4 pt-2 lg:hidden">
-                <Button type="submit" className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold flex items-center justify-center gap-2" disabled={loading}>
+                <Button type="submit" className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold flex items-center justify-center gap-2" disabled={loading || !!signedAt}>
                   <Save className="size-5" />{loading ? 'Salvando...' : 'Salvar Orçamento'}
                 </Button>
               </div>
@@ -532,7 +541,7 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
                   </p>
                 )}
                 <div className="hidden lg:block pt-1">
-                  <Button type="submit" className="w-full h-14 bg-primary hover:bg-primary-dark text-white font-bold shadow-md" disabled={loading}>
+                  <Button type="submit" className="w-full h-14 bg-primary hover:bg-primary-dark text-white font-bold shadow-md" disabled={loading || !!signedAt}>
                     {loading ? 'Salvando...' : 'Salvar Orçamento'}
                   </Button>
                 </div>
