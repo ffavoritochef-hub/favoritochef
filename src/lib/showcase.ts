@@ -27,7 +27,7 @@ export type GalleryLayout = 'grade' | 'carrossel' | 'mosaico';
 
 export const GALLERY_LAYOUTS: Record<GalleryLayout, { label: string; hint: string }> = {
   mosaico: { label: 'Mosaico', hint: 'Fotos em colunas, cada uma no seu formato' },
-  grade: { label: 'Grade', hint: 'Quadradinhos alinhados, visual organizado' },
+  grade: { label: 'Grade', hint: 'Fotos em destaque e menores, bem alinhadas' },
   carrossel: { label: 'Carrossel', hint: 'Uma foto grande por vez, passando para o lado' },
 };
 
