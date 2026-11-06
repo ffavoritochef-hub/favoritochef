@@ -10,11 +10,12 @@ export const SHOWCASE_THEMES: Record<ShowcaseTheme, { label: string; hint: strin
   festivo: { label: 'Festivo', hint: 'Colorido e descontraído' },
 };
 
-export type SectionKey = 'about' | 'gallery' | 'events' | 'menus' | 'testimonials' | 'contact';
+export type SectionKey = 'about' | 'gallery' | 'videos' | 'events' | 'menus' | 'testimonials' | 'contact';
 
 export const SECTION_META: Record<SectionKey, { label: string; defaultTitle: string; hint: string }> = {
   about: { label: 'Sobre', defaultTitle: 'Quem somos', hint: 'A história e os diferenciais do buffet' },
   gallery: { label: 'Galeria', defaultTitle: 'Nossos eventos', hint: 'Fotos de eventos, mesas e pratos' },
+  videos: { label: 'Vídeos', defaultTitle: 'Bastidores em vídeo', hint: 'Vídeos curtos, sem som, que tocam sozinhos' },
   events: { label: 'Tipos de evento', defaultTitle: 'Eventos que realizamos', hint: 'Casamento, aniversário, corporativo...' },
   menus: { label: 'Cardápios', defaultTitle: 'Nossos cardápios', hint: 'Puxados do seu cadastro de cardápios' },
   testimonials: { label: 'Depoimentos', defaultTitle: 'O que dizem nossos clientes', hint: 'Elogios de quem já fez evento' },
@@ -31,8 +32,14 @@ export const GALLERY_LAYOUTS: Record<GalleryLayout, { label: string; hint: strin
   carrossel: { label: 'Carrossel', hint: 'Uma foto grande por vez, passando para o lado' },
 };
 
+/** Formatos de vídeo aceitos no envio (o bucket libera os mesmos na migração 0015). */
+export const SHOWCASE_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
+
 export const SHOWCASE_LIMITS = {
   gallery: 30,
+  videos: 6,
+  /** Tamanho máximo de cada vídeo enviado (o bucket aceita até 30 MB). */
+  videoBytes: 30 * 1024 * 1024,
   heroSlides: 6,
   events: 8,
   testimonials: 10,
@@ -44,6 +51,11 @@ export const SHOWCASE_LIMITS = {
 };
 
 export interface ShowcaseImage {
+  url: string;
+  caption: string;
+}
+
+export interface ShowcaseVideo {
   url: string;
   caption: string;
 }
@@ -68,16 +80,19 @@ export interface ShowcaseSection {
 
 export interface ShowcaseContent {
   theme: ShowcaseTheme;
-  /** image = foto principal; slides = fotos extras que viram carrossel na capa. */
-  hero: { title: string; subtitle: string; image: string | null; slides: string[] };
+  /** image = foto principal; slides = fotos extras que viram carrossel na capa; video = fundo em vídeo (a foto vira a capa enquanto carrega). */
+  hero: { title: string; subtitle: string; image: string | null; slides: string[]; video: string | null };
   about: { text: string; image: string | null };
   gallery: ShowcaseImage[];
   galleryLayout: GalleryLayout;
+  /** Vídeos da seção "Vídeos" (sempre tocam sem som). */
+  videos: ShowcaseVideo[];
   events: ShowcaseEventType[];
   /** Cardápios exibidos. Vazio = todos os ativos. */
   menuIds: string[];
   testimonials: ShowcaseTestimonial[];
-  contact: { text: string; instagram: string };
+  /** video = fundo da chamada final (opcional). */
+  contact: { text: string; instagram: string; video: string | null };
   sections: ShowcaseSection[];
 }
 
@@ -100,14 +115,16 @@ export function defaultShowcase(name = ''): ShowcaseContent {
       subtitle: 'Buffet completo para casamentos, aniversários e eventos corporativos.',
       image: null,
       slides: [],
+      video: null,
     },
     about: { text: '', image: null },
     gallery: [],
     galleryLayout: 'mosaico',
+    videos: [],
     events: [],
     menuIds: [],
     testimonials: [],
-    contact: { text: 'Conte como você imagina o seu evento e receba uma proposta personalizada.', instagram: '' },
+    contact: { text: 'Conte como você imagina o seu evento e receba uma proposta personalizada.', instagram: '', video: null },
     sections: SECTION_KEYS.map((key) => ({ key, enabled: key !== 'testimonials', title: SECTION_META[key].defaultTitle })),
   };
 }
@@ -151,7 +168,13 @@ export function normalizeShowcase(raw: unknown, name = ''): ShowcaseContent {
     seen.add(key);
     sections.push({ key, enabled: s.enabled !== false, title: str(s.title, L.title) || SECTION_META[key].defaultTitle });
   }
-  for (const s of base.sections) if (!seen.has(s.key)) sections.push(s);
+  // seções novas (ex.: vídeos) entram antes da chamada final, não depois dela
+  for (const s of base.sections) {
+    if (seen.has(s.key)) continue;
+    const ci = sections.findIndex((x) => x.key === 'contact');
+    if (s.key !== 'contact' && ci !== -1) sections.splice(ci, 0, s);
+    else sections.push(s);
+  }
 
   return {
     theme: typeof raw.theme === 'string' && raw.theme in SHOWCASE_THEMES ? (raw.theme as ShowcaseTheme) : base.theme,
@@ -160,6 +183,7 @@ export function normalizeShowcase(raw: unknown, name = ''): ShowcaseContent {
       subtitle: typeof hero.subtitle === 'string' ? str(hero.subtitle, L.subtitle) : base.hero.subtitle,
       image: img(hero.image),
       slides: arr(hero.slides).filter(isImageUrl).slice(0, L.heroSlides),
+      video: img(hero.video),
     },
     about: { text: str(about.text, L.text), image: img(about.image) },
     gallery: arr(raw.gallery)
@@ -169,6 +193,11 @@ export function normalizeShowcase(raw: unknown, name = ''): ShowcaseContent {
       .map((g) => ({ url: g.url as string, caption: str(g.caption, L.caption) })),
     galleryLayout:
       typeof raw.galleryLayout === 'string' && raw.galleryLayout in GALLERY_LAYOUTS ? (raw.galleryLayout as GalleryLayout) : base.galleryLayout,
+    videos: arr(raw.videos)
+      .filter(isObj)
+      .filter((v) => isImageUrl(v.url))
+      .slice(0, L.videos)
+      .map((v) => ({ url: v.url as string, caption: str(v.caption, L.caption) })),
     events: arr(raw.events)
       .filter(isObj)
       .map((e) => ({ title: str(e.title, L.title), text: str(e.text, L.shortText), image: img(e.image) }))
@@ -183,14 +212,24 @@ export function normalizeShowcase(raw: unknown, name = ''): ShowcaseContent {
     contact: {
       text: typeof contact.text === 'string' ? str(contact.text, L.shortText) : base.contact.text,
       instagram: normalizeInstagram(contact.instagram),
+      video: img(contact.video),
     },
     sections,
   };
 }
 
-/** Todas as fotos usadas no conteúdo (para apagar do storage as que saíram). */
+/** Todas as fotos e vídeos usados no conteúdo (para apagar do storage os que saíram). */
 export function showcaseImageUrls(c: ShowcaseContent): string[] {
-  return [c.hero.image, ...c.hero.slides, c.about.image, ...c.gallery.map((g) => g.url), ...c.events.map((e) => e.image)].filter(
+  return [
+    c.hero.image,
+    ...c.hero.slides,
+    c.hero.video,
+    c.about.image,
+    ...c.gallery.map((g) => g.url),
+    ...c.videos.map((v) => v.url),
+    c.contact.video,
+    ...c.events.map((e) => e.image),
+  ].filter(
     (u): u is string => !!u
   );
 }

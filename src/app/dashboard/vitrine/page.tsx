@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Film,
   ImagePlus,
   Loader2,
   Plus,
@@ -45,6 +46,7 @@ import {
   SHOWCASE_MENU_SELECT_BASIC,
   SHOWCASE_LIMITS as L,
   SHOWCASE_THEMES,
+  SHOWCASE_VIDEO_TYPES,
   defaultShowcase,
   normalizeInstagram,
   normalizeShowcase,
@@ -172,6 +174,55 @@ export default function ShowcaseEditorPage() {
     return url;
   }
 
+  /** Vídeos vão como estão (sem compressão); na página eles sempre tocam sem som. */
+  async function uploadVideo(file: File): Promise<string> {
+    if (!SHOWCASE_VIDEO_TYPES.includes(file.type)) throw new Error('Use vídeos MP4, WEBM ou MOV.');
+    if (file.size > L.videoBytes) throw new Error(`Vídeo muito grande (máx. ${Math.round(L.videoBytes / 1024 / 1024)} MB). Envie um trecho mais curto.`);
+    const ext = file.type === 'video/webm' ? 'webm' : file.type === 'video/quicktime' ? 'mov' : 'mp4';
+    const path = `${tenant!.id}/videos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from(SHOWCASE_BUCKET).upload(path, file, { contentType: file.type, cacheControl: '31536000' });
+    if (error) {
+      if (/mime|not supported|exceeded|too large|maximum/i.test(error.message))
+        throw new Error('O banco ainda não aceita vídeos. Execute a migração 0015_vitrine_videos.sql no Supabase.');
+      throw error;
+    }
+    const url = supabase.storage.from(SHOWCASE_BUCKET).getPublicUrl(path).data.publicUrl;
+    sessionUploads.current.add(url);
+    return url;
+  }
+
+  async function pickVideo(key: string, file: File | undefined, apply: (url: string) => void) {
+    if (!file) return;
+    setUploading(key);
+    try {
+      apply(await uploadVideo(file));
+    } catch (e) {
+      toast.error((e as Error).message || 'Erro ao enviar o vídeo.');
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function addVideos(files: FileList | null) {
+    if (!files?.length) return;
+    const room = L.videos - content!.videos.length;
+    const list = Array.from(files).slice(0, room);
+    if (files.length > room) toast.warning(`A seção aceita até ${L.videos} vídeos. Enviando ${list.length}.`);
+    let ok = 0;
+    for (let i = 0; i < list.length; i++) {
+      setUploading(`videos:${i + 1}/${list.length}`);
+      try {
+        const url = await uploadVideo(list[i]);
+        update((c) => ({ ...c, videos: [...c.videos, { url, caption: '' }].slice(0, L.videos) }));
+        ok++;
+      } catch (e) {
+        toast.error(`${list[i].name}: ${(e as Error).message}`);
+      }
+    }
+    setUploading(null);
+    if (ok) toast.success(ok === 1 ? 'Vídeo adicionado!' : `${ok} vídeos adicionados!`);
+  }
+
   /** Envia 1 foto e entrega a URL para `apply`. `key` identifica o botão que mostra "Enviando...". */
   async function pickOne(key: string, file: File | undefined, apply: (url: string) => void, maxSize?: number) {
     if (!file) return;
@@ -277,7 +328,7 @@ export default function ShowcaseEditorPage() {
         const suggested = out.events as { title: string; text: string }[];
         return {
           ...c,
-          hero: { title: out.heroTitle || c.hero.title, subtitle: out.heroSubtitle || c.hero.subtitle, image: c.hero.image ?? out.cover, slides: c.hero.slides },
+          hero: { title: out.heroTitle || c.hero.title, subtitle: out.heroSubtitle || c.hero.subtitle, image: c.hero.image ?? out.cover, slides: c.hero.slides, video: c.hero.video },
           about: { ...c.about, text: out.aboutText || c.about.text },
           contact: { ...c.contact, text: out.contactText || c.contact.text },
           gallery: [...ordered, ...rest],
@@ -469,6 +520,15 @@ export default function ShowcaseEditorPage() {
             onAdd={addHeroSlides}
             onChange={(slides) => update((c) => ({ ...c, hero: { ...c.hero, slides } }))}
           />
+          <VideoField
+            label="Vídeo de fundo da capa (opcional)"
+            hint="Toca sozinho, sem som e em loop no lugar das fotos. Prefira um vídeo curto (até 20 s). A foto principal aparece enquanto ele carrega."
+            url={content.hero.video}
+            busy={uploading === 'hero-video'}
+            disabled={busy}
+            onPick={(f) => pickVideo('hero-video', f, (url) => update((c) => ({ ...c, hero: { ...c.hero, video: url } })))}
+            onRemove={() => update((c) => ({ ...c, hero: { ...c.hero, video: null } }))}
+          />
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="hero-title">Título</Label>
@@ -624,6 +684,10 @@ export default function ShowcaseEditorPage() {
                 </div>
               )}
 
+              {s.key === 'videos' && (
+                <VideosEditor content={content} update={update} uploading={uploading} disabled={busy} onAdd={addVideos} />
+              )}
+
               {s.key === 'menus' && (
                 menus.length === 0 ? (
                   <p className="text-sm text-slate-500">
@@ -711,6 +775,15 @@ export default function ShowcaseEditorPage() {
                         className="flex-1 min-w-0 h-full px-1 pr-3 bg-transparent outline-none text-base" />
                     </div>
                   </div>
+                  <VideoField
+                    label="Vídeo de fundo (opcional)"
+                    hint="Fica escurecido atrás do convite final, sem som. Sem vídeo, usamos a foto da capa."
+                    url={content.contact.video}
+                    busy={uploading === 'contact-video'}
+                    disabled={busy}
+                    onPick={(f) => pickVideo('contact-video', f, (url) => update((c) => ({ ...c, contact: { ...c.contact, video: url } })))}
+                    onRemove={() => update((c) => ({ ...c, contact: { ...c.contact, video: null } }))}
+                  />
                   <p className="text-xs text-slate-500">
                     {tenant.phone
                       ? <>Botão de WhatsApp: <strong>{tenant.phone}</strong>.</>
@@ -918,6 +991,127 @@ function ImageField({
           {!small && <span className="text-sm font-medium">{busy ? 'Enviando...' : 'Escolher foto'}</span>}
         </button>
       )}
+    </div>
+  );
+}
+
+const VIDEO_ACCEPT = 'video/mp4,video/webm,video/quicktime';
+
+function VideoField({
+  label,
+  hint,
+  url,
+  busy,
+  disabled,
+  onPick,
+  onRemove,
+}: {
+  label: string;
+  hint: string;
+  url: string | null;
+  busy: boolean;
+  disabled: boolean;
+  onPick: (f: File | undefined) => void;
+  onRemove: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <p className="text-xs text-slate-500">{hint}</p>
+      <input ref={ref} type="file" accept={VIDEO_ACCEPT} className="hidden"
+        onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = ''; }} />
+      {url ? (
+        <div className="flex items-center gap-3 rounded-xl border border-border p-2">
+          <video src={`${url}#t=0.1`} muted playsInline preload="metadata" className="h-20 w-14 shrink-0 rounded-lg bg-black object-cover" />
+          <span className="flex-1 text-sm text-slate-600">Vídeo escolhido</span>
+          <Button type="button" variant="outline" size="sm" onClick={() => ref.current?.click()} disabled={disabled} className="gap-1.5">
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />} Trocar
+          </Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onRemove} disabled={disabled} aria-label="Remover vídeo" className="text-destructive">
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" onClick={() => ref.current?.click()} disabled={disabled} className="w-full min-h-[48px] gap-2 border-dashed">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />}
+          {busy ? 'Enviando vídeo...' : 'Escolher vídeo'}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function VideosEditor({
+  content,
+  update,
+  uploading,
+  disabled,
+  onAdd,
+}: {
+  content: ShowcaseContent;
+  update: (fn: (c: ShowcaseContent) => ShowcaseContent) => void;
+  uploading: string | null;
+  disabled: boolean;
+  onAdd: (files: FileList | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const progress = uploading?.startsWith('videos:') ? uploading.slice(7) : null;
+  const move = (i: number, d: -1 | 1) =>
+    update((c) => {
+      const v = [...c.videos];
+      const j = i + d;
+      if (j < 0 || j >= v.length) return c;
+      [v[i], v[j]] = [v[j], v[i]];
+      return { ...c, videos: v };
+    });
+
+  return (
+    <div className="space-y-3">
+      {content.videos.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {content.videos.map((v, i) => (
+            <div key={v.url} className="rounded-xl border border-border overflow-hidden bg-white">
+              <div className="relative aspect-[9/16] max-h-64 w-full bg-black">
+                <video src={`${v.url}#t=0.1`} muted playsInline loop preload="metadata" className="size-full object-cover"
+                  onMouseEnter={(e) => e.currentTarget.play().catch(() => {})} onMouseLeave={(e) => e.currentTarget.pause()} />
+                <div className="absolute inset-x-1.5 bottom-1.5 flex justify-between">
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Mover para trás"
+                      className="size-8 rounded-full bg-white/90 text-slate-700 shadow flex items-center justify-center disabled:opacity-40">
+                      <ArrowUp className="size-4 -rotate-90" />
+                    </button>
+                    <button type="button" onClick={() => move(i, 1)} disabled={i === content.videos.length - 1} aria-label="Mover para frente"
+                      className="size-8 rounded-full bg-white/90 text-slate-700 shadow flex items-center justify-center disabled:opacity-40">
+                      <ArrowDown className="size-4 -rotate-90" />
+                    </button>
+                  </div>
+                  <button type="button" aria-label="Remover vídeo"
+                    onClick={() => update((c) => ({ ...c, videos: c.videos.filter((_, k) => k !== i) }))}
+                    className="size-8 rounded-full bg-white/90 text-destructive shadow flex items-center justify-center">
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              </div>
+              <input value={v.caption} maxLength={L.caption} placeholder="Legenda (opcional)" aria-label={`Legenda do vídeo ${i + 1}`}
+                onChange={(e) => update((c) => ({ ...c, videos: c.videos.map((x, k) => (k === i ? { ...x, caption: e.target.value } : x)) }))}
+                className="w-full px-2.5 py-2 text-sm outline-none border-t border-border" />
+            </div>
+          ))}
+        </div>
+      )}
+      <input ref={ref} type="file" accept={VIDEO_ACCEPT} multiple className="hidden"
+        onChange={(e) => { onAdd(e.target.files); e.target.value = ''; }} />
+      {content.videos.length < L.videos && (
+        <Button type="button" variant="outline" onClick={() => ref.current?.click()} disabled={disabled} className="w-full min-h-[52px] gap-2 border-dashed">
+          {progress ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />}
+          {progress ? `Enviando ${progress.replace('/', ' de ')}...` : 'Adicionar vídeos'}
+        </Button>
+      )}
+      <p className="text-xs text-slate-500">
+        {content.videos.length}/{L.videos} vídeos, até {Math.round(L.videoBytes / 1024 / 1024)} MB cada. Na página eles tocam sozinhos, <strong>sem som</strong> e em loop.
+        Use as setas da seção para escolher em que lugar da página eles aparecem.
+      </p>
     </div>
   );
 }

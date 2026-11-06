@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, MapPin, MessageCircle, PartyPopper, Quote, Send, Star, UtensilsCrossed, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, MapPin, MessageCircle, PartyPopper, Play, Quote, Send, Star, UtensilsCrossed, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { darken } from '@/lib/tenant';
 import { whatsappUrl } from '@/lib/leads';
@@ -20,6 +20,7 @@ export interface ShowcaseData {
 const SECTION_ID: Record<SectionKey, string> = {
   about: 'sobre',
   gallery: 'galeria',
+  videos: 'videos',
   events: 'eventos',
   menus: 'cardapios',
   testimonials: 'depoimentos',
@@ -77,17 +78,19 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
   const { brand, content: c, menus } = data;
   const t = THEME_STYLE[c.theme];
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const [videoOpen, setVideoOpen] = useState<number | null>(null);
   const heroImages = [c.hero.image, ...c.hero.slides].filter((u): u is string => !!u);
   const [heroSlide, setHeroIndex] = useState(0);
   const heroIndex = heroSlide < heroImages.length ? heroSlide : 0;
   const [scrolled, setScrolled] = useState(false);
 
-  // capa em carrossel: troca a foto a cada 6 s
+  const heroVideo = c.hero.video;
+  // capa em carrossel: troca a foto a cada 6 s (com vídeo de fundo, o vídeo manda)
   useEffect(() => {
-    if (heroImages.length < 2) return;
+    if (heroImages.length < 2 || heroVideo) return;
     const id = setInterval(() => setHeroIndex((i) => (i + 1) % heroImages.length), 6000);
     return () => clearInterval(id);
-  }, [heroImages.length]);
+  }, [heroImages.length, heroVideo]);
 
   // barra do topo: transparente sobre a capa, sólida ao rolar (na prévia fica sempre sólida)
   useEffect(() => {
@@ -119,6 +122,7 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
   const hasContent: Record<SectionKey, boolean> = {
     about: !!(c.about.text || c.about.image),
     gallery: c.gallery.length > 0,
+    videos: c.videos.length > 0,
     events: c.events.length > 0,
     menus: menus.length > 0,
     testimonials: c.testimonials.length > 0,
@@ -207,6 +211,37 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
                   ))}
                 </div>
               )}
+            </div>
+          </section>
+        );
+
+      case 'videos':
+        return (
+          <section key={key} id="videos" className={cn('scroll-mt-16 py-20 sm:py-28', bg)}>
+            <div className="max-w-6xl mx-auto px-5 sm:px-8">
+              <SectionHead eyebrow="Vídeos" title={title('videos')} heading={t.heading} />
+              <div className="flex flex-wrap justify-center gap-3 sm:gap-5">
+                {c.videos.map((v, vi) => (
+                  <button
+                    key={v.url + vi}
+                    type="button"
+                    onClick={() => setVideoOpen(vi)}
+                    className={cn(
+                      'group relative isolate overflow-hidden aspect-[9/16] bg-black shadow-xl shadow-black/15',
+                      'w-[calc(50%-0.375rem)] sm:w-[250px] lg:w-[270px]',
+                      t.radius
+                    )}
+                    aria-label={v.caption || `Vídeo ${vi + 1}`}
+                  >
+                    <AutoVideo src={v.url} className="absolute inset-0 -z-10 size-full object-cover transition duration-700 group-hover:scale-105" />
+                    <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    <span className="absolute right-3 top-3 inline-flex size-9 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm opacity-80 transition group-hover:opacity-100">
+                      <Play className="size-4 fill-current" />
+                    </span>
+                    {v.caption && <span className="absolute inset-x-0 bottom-0 p-4 text-left text-sm font-medium text-white">{v.caption}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
         );
@@ -325,7 +360,12 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
       case 'contact':
         return (
           <section key={key} id="contato" className={cn('scroll-mt-16 relative isolate overflow-hidden py-24 sm:py-32 text-white', t.dark)}>
-            {contactImage ? (
+            {c.contact.video ? (
+              <>
+                <AutoVideo src={c.contact.video} poster={contactImage} className="absolute inset-0 -z-20 size-full object-cover opacity-45" />
+                <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/60 via-black/45 to-black/80" />
+              </>
+            ) : contactImage ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={contactImage} alt="" loading="lazy" className="absolute inset-0 -z-20 size-full object-cover opacity-40" />
@@ -405,7 +445,13 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
 
       {/* Capa */}
       <section className={cn('relative isolate overflow-hidden min-h-[min(92svh,900px)] flex items-center', !preview && '-mt-16')}>
-        {heroImages.length > 0 ? (
+        {heroVideo ? (
+          <>
+            <AutoVideo src={heroVideo} poster={heroImages[0] ?? null} eager className="absolute inset-0 -z-20 size-full object-cover" />
+            <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.35),rgba(0,0,0,0.7))]" />
+            <div className="absolute inset-x-0 top-0 -z-10 h-40 bg-gradient-to-b from-black/60 to-transparent" />
+          </>
+        ) : heroImages.length > 0 ? (
           <>
             {heroImages.map((src, hi) => (
               // eslint-disable-next-line @next/next/no-img-element
@@ -458,7 +504,7 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
             </p>
           )}
         </div>
-        {heroImages.length > 1 && (
+        {heroImages.length > 1 && !heroVideo && (
           <div className="absolute bottom-6 inset-x-0 z-10 flex justify-center gap-2">
             {heroImages.map((_, hi) => (
               <button
@@ -561,9 +607,110 @@ export function ShowcaseView({ data, preview = false }: { data: ShowcaseData; pr
         </a>
       )}
 
+      {videoOpen !== null && c.videos[videoOpen] && (
+        <VideoLightbox videos={c.videos} index={videoOpen} onChange={setVideoOpen} onClose={() => setVideoOpen(null)} />
+      )}
+
       {lightbox !== null && c.gallery[lightbox] && (
         <Lightbox images={c.gallery} index={lightbox} onChange={setLightbox} onClose={() => setLightbox(null)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Vídeo sempre sem som, em loop, que só toca quando aparece na tela (economiza dados no celular).
+ * Com "reduzir movimento" ligado no aparelho, fica parado no primeiro quadro.
+ */
+function AutoVideo({ src, poster = null, eager = false, className }: { src: string; poster?: string | null; eager?: boolean; className?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.muted = true; // garante o mudo mesmo se o atributo for ignorado
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) el.play().catch(() => {});
+        else el.pause();
+      },
+      { threshold: 0.25 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [src]);
+  return (
+    <video
+      ref={ref}
+      // #t=0.1 mostra o primeiro quadro antes de tocar (Safari não gera prévia sem isso)
+      src={poster ? src : `${src}#t=0.1`}
+      poster={poster ?? undefined}
+      muted
+      loop
+      playsInline
+      disablePictureInPicture
+      preload={eager ? 'auto' : 'metadata'}
+      aria-hidden="true"
+      tabIndex={-1}
+      className={cn('pointer-events-none', className)}
+    />
+  );
+}
+
+function VideoLightbox({
+  videos,
+  index,
+  onChange,
+  onClose,
+}: {
+  videos: { url: string; caption: string }[];
+  index: number;
+  onChange: (i: number) => void;
+  onClose: () => void;
+}) {
+  const go = useCallback((d: number) => onChange((index + d + videos.length) % videos.length), [index, videos.length, onChange]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') go(1);
+      if (e.key === 'ArrowLeft') go(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [go, onClose]);
+  const v = videos[index];
+  return (
+    <div className="fixed inset-0 z-[110] flex flex-col bg-black/95" role="dialog" aria-modal="true">
+      <div className="flex items-center justify-between p-3 text-white/80 text-sm">
+        <span className="pl-2">{index + 1} / {videos.length}</span>
+        <button type="button" onClick={onClose} className="size-11 rounded-full flex items-center justify-center hover:bg-white/10" aria-label="Fechar">
+          <X className="size-6" />
+        </button>
+      </div>
+      <div className="relative flex-1 min-h-0 flex items-center justify-center px-2" onClick={onClose}>
+        <video
+          key={v.url}
+          src={v.url}
+          autoPlay
+          muted
+          loop
+          playsInline
+          disablePictureInPicture
+          className="max-h-full max-w-full rounded-lg"
+          onClick={(e) => e.stopPropagation()}
+        />
+        {videos.length > 1 && (
+          <>
+            <button type="button" onClick={(e) => { e.stopPropagation(); go(-1); }} className="absolute left-2 flex size-12 rounded-full bg-white/10 text-white items-center justify-center hover:bg-white/20" aria-label="Vídeo anterior">
+              <ChevronLeft className="size-6" />
+            </button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); go(1); }} className="absolute right-2 flex size-12 rounded-full bg-white/10 text-white items-center justify-center hover:bg-white/20" aria-label="Próximo vídeo">
+              <ChevronRight className="size-6" />
+            </button>
+          </>
+        )}
+      </div>
+      <p className="min-h-14 px-6 py-4 text-center text-white/85">{v.caption}</p>
     </div>
   );
 }
