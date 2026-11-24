@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { localTodayIso } from '@/lib/leads';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { 
@@ -35,6 +37,8 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
+  const todayIso = localTodayIso();
 
   useEffect(() => {
     fetchEvents();
@@ -49,7 +53,12 @@ export default function EventsPage() {
         .order('date', { ascending: true });
 
       if (error) throw error;
-      setEvents(data || []);
+      // Próximos primeiro (do mais perto ao mais longe); os que já passaram vão para o fim.
+      const today = localTodayIso();
+      const list = data || [];
+      const upcoming = list.filter((e) => e.date >= today);
+      const past = list.filter((e) => e.date < today).reverse();
+      setEvents([...upcoming, ...past]);
     } catch (error: any) {
       toast.error('Erro ao carregar eventos: ' + error.message);
     } finally {
@@ -87,7 +96,8 @@ export default function EventsPage() {
         </Button>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 w-full">
+      {loading || events.length === 0 ? (
+        <div className="grid grid-cols-1 w-full">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64 text-slate-500 gap-4 rounded-2xl border border-border bg-white mx-1">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary lg:size-9"></div>
@@ -99,8 +109,94 @@ export default function EventsPage() {
             <p className="text-base sm:text-lg font-semibold text-slate-900 lg:text-base">Nenhum evento agendado.</p>
             <p className="text-xs sm:text-sm text-slate-500 mt-2">Clique em &quot;Agendar Evento&quot; para começar.</p>
           </div>
-        ) : (
-          events.map((event) => (
+        ) : null}
+        </div>
+      ) : (
+        <>
+          {/* Desktop: tabela dentro de um card */}
+          <div className="hidden lg:block bg-white border border-border shadow-card rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/80 border-b border-border">
+                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
+                  <th className="px-4 py-3 font-semibold w-[92px]">Data</th>
+                  <th className="px-4 py-3 font-semibold">Evento / Cliente</th>
+                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Horário</th>
+                  <th className="px-4 py-3 font-semibold">Local</th>
+                  <th className="px-4 py-3 font-semibold text-right">Convid.</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {events.map((event) => {
+                  const d = new Date(event.date + 'T12:00:00');
+                  const past = event.date < todayIso;
+                  return (
+                    <tr
+                      key={event.id}
+                      onClick={() => router.push(`/dashboard/events/${event.id}`)}
+                      className={`cursor-pointer transition-colors hover:bg-primary/5 ${past ? 'opacity-60' : ''}`}
+                    >
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-lg font-bold leading-none text-slate-900">{d.getDate()}</span>
+                          <span className="text-[11px] uppercase font-bold tracking-wider text-primary">
+                            {d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          {d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')} · {d.getFullYear()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 max-w-[260px]">
+                        <p className="font-semibold text-slate-900 truncate" title={event.name}>{event.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{event.client?.name || 'Sem cliente'}</p>
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-slate-600">
+                        {event.start_time?.slice(0, 5)} – {event.end_time?.slice(0, 5)}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600 max-w-[220px]">
+                        <span className="block truncate" title={event.address || ''}>{event.address || '—'}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">{event.guest_count || 0}</td>
+                      <td className="px-4 py-2.5">
+                        <Badge className={`${statusStyles[event.status] || 'bg-slate-700 text-white border-slate-600 rounded-full'} border font-semibold text-[10px] px-2 py-0.5 uppercase tracking-tight whitespace-nowrap`}>
+                          {event.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button asChild variant="ghost" size="icon" className="size-8 text-slate-500 hover:text-primary" title="Detalhes" aria-label="Detalhes">
+                            <Link href={`/dashboard/events/${event.id}`}><Eye className="size-4" /></Link>
+                          </Button>
+                          <Button asChild variant="ghost" size="icon" className="size-8 text-slate-500 hover:text-primary" title="Editar" aria-label="Editar">
+                            <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="size-4" /></Link>
+                          </Button>
+                          <Button asChild variant="ghost" size="icon" className="size-8 text-slate-500 hover:text-primary" title="Orçamento" aria-label="Orçamento">
+                            <Link href="/dashboard/budgets/new"><FileText className="size-4" /></Link>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-slate-400 hover:text-destructive hover:bg-destructive/5"
+                            onClick={() => setToDelete(event)}
+                            title="Excluir evento"
+                            aria-label="Excluir evento"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Celular/tablet: cartões */}
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 w-full lg:hidden">
+            {events.map((event) => (
             <div 
               key={event.id} 
               className="group bg-white border-border shadow-card rounded-2xl p-4 sm:p-6 hover:shadow-card-hover transition-all w-full lg:p-4"
@@ -171,9 +267,10 @@ export default function EventsPage() {
                 </div>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+          </div>
+        </>
+      )}
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !deleting && !o && setToDelete(null)}
