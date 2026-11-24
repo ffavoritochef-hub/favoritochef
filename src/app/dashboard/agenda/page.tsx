@@ -161,11 +161,11 @@ export default function AgendaPage() {
                             </span>
                             <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 max-w-full font-medium">
                               <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
-                              <span className="truncate max-w-[220px] sm:max-w-none">{event.address}</span>
+                              <span className="truncate max-w-[220px] sm:max-w-none">{event.address || "Local não informado"}</span>
                             </span>
                             <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium">
                               <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
-                              {event.guest_count} convidados
+                              {event.guest_count ? `${event.guest_count} convidados` : "Convidados não informados"}
                             </span>
                           </div>
                         </div>
@@ -197,11 +197,11 @@ export default function AgendaPage() {
                                   <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Tipo:</span> <span className="text-slate-900 font-bold text-right">{event.type}</span></p>
                                   <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Data:</span> <span className="text-slate-900 font-bold text-right">{new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span></p>
                                   <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Horário:</span> <span className="text-slate-900 font-bold text-right">{event.start_time.slice(0, 5)} às {event.end_time.slice(0, 5)}</span></p>
-                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Convidados:</span> <span className="text-slate-900 font-bold text-right">{event.guest_count}</span></p>
+                                  <p className="text-sm sm:text-base flex justify-between gap-2"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Convidados:</span> <span className="text-slate-900 font-bold text-right">{event.guest_count || "—"}</span></p>
                                   <p className="text-sm sm:text-base flex justify-between gap-2 items-center"><span className="text-slate-500 shrink-0 font-semibold uppercase tracking-wider text-xs">Status:</span> <span className={`font-bold text-right px-2.5 py-0.5 rounded-full text-xs ${
                                     statusStyles[event.status] || ''
                                   }`}>{event.status}</span></p>
-                                  <p className="text-sm sm:text-base flex flex-col gap-1.5"><span className="text-slate-500 font-semibold uppercase tracking-wider text-xs">Endereço:</span> <span className="text-slate-900 font-bold break-words leading-relaxed">{event.address}</span></p>
+                                  <p className="text-sm sm:text-base flex flex-col gap-1.5"><span className="text-slate-500 font-semibold uppercase tracking-wider text-xs">Endereço:</span> <span className="text-slate-900 font-bold break-words leading-relaxed">{event.address || "—"}</span></p>
                                 </div>
                               </div>
                               <div className="space-y-3 sm:space-y-4">

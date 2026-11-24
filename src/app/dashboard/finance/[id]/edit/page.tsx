@@ -18,6 +18,7 @@ import {
 import { ChevronLeft, Save, DollarSign, ArrowUpRight, ArrowDownRight, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { ExpenseExtraFields } from '@/components/finance/ExpenseExtraFields';
 
 export default function EditTransactionPage() {
   const router = useRouter();
@@ -33,7 +34,9 @@ export default function EditTransactionPage() {
     type: 'receivable' as 'receivable' | 'payable',
     date: localTodayIso(),
     status: 'pago',
-    event_id: '' as string | ''
+    event_id: '' as string | '',
+    category: '',
+    paid_by: '',
   });
 
   async function fetchAll() {
@@ -63,7 +66,9 @@ export default function EditTransactionPage() {
         type: t.type === 'payable' ? 'payable' : 'receivable',
         date: t.date,
         status: t.status || 'pago',
-        event_id: t.event_id || ''
+        event_id: t.event_id || '',
+        category: t.category || '',
+        paid_by: t.paid_by || '',
       });
       setEvents(eRes.data || []);
     } catch (error: any) {
@@ -92,7 +97,9 @@ export default function EditTransactionPage() {
     try {
       const payload = {
         ...formData,
-        event_id: formData.event_id || null
+        event_id: formData.event_id || null,
+        category: formData.category || null,
+        paid_by: formData.type === 'payable' ? formData.paid_by.trim() || null : null,
       };
       const { error } = await supabase
         .from('finance_transactions')
@@ -276,6 +283,14 @@ export default function EditTransactionPage() {
                 </p>
               </div>
 
+              {!isReceivable && (
+                <ExpenseExtraFields
+                  category={formData.category}
+                  paidBy={formData.paid_by}
+                  onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+                />
+              )}
+
               <div className="field-group lg:col-span-12">
                 <Label>Status da Transação</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-3xl">
@@ -305,7 +320,9 @@ export default function EditTransactionPage() {
                         : 'border-slate-200 text-slate-500 hover:text-slate-700 bg-white'
                     }`}
                   >
-                    <span className="font-semibold">⏳ Pendente</span>
+                    <span className="font-semibold">
+                      {!isReceivable && formData.paid_by.trim() ? '⏳ A reembolsar' : '⏳ Pendente'}
+                    </span>
                   </Button>
                   <Button
                     type="button"

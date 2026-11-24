@@ -75,13 +75,18 @@ export default function ClientsPage() {
     );
     if (!searchTerm.trim()) return list;
     const q = searchTerm.trim().toLowerCase();
+    // Telefone/CPF: compara só os dígitos ("(11) 9..." acha "119...").
+    const qd = q.replace(/\D/g, '');
+    const digits = (v?: string | null) => (v || '').replace(/\D/g, '');
     return list.filter(
       (c) =>
         c.name?.toLowerCase().includes(q) ||
         c.email?.toLowerCase().includes(q) ||
         c.document?.includes(q) ||
         c.phone?.includes(q) ||
-        c.whatsapp?.includes(q)
+        c.whatsapp?.includes(q) ||
+        (qd.length >= 3 &&
+          [c.document, c.phone, c.whatsapp].some((v) => digits(v).includes(qd)))
     );
   }, [clients, searchTerm, showInactive]);
 
@@ -412,18 +417,25 @@ export default function ClientsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-slate-700 font-mono text-sm font-semibold">
-                        {client.document}
+                        {client.document || <span className="font-sans font-normal text-slate-400">—</span>}
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                            <Phone className="w-3.5 h-3.5 text-primary" />
-                            {client.whatsapp || client.phone}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                            <Mail className="w-3.5 h-3.5 text-primary" />
-                            {client.email}
-                          </div>
+                          {(client.whatsapp || client.phone) && (
+                            <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+                              <Phone className="w-3.5 h-3.5 text-primary" />
+                              {client.whatsapp || client.phone}
+                            </div>
+                          )}
+                          {client.email && (
+                            <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+                              <Mail className="w-3.5 h-3.5 text-primary" />
+                              {client.email}
+                            </div>
+                          )}
+                          {!client.whatsapp && !client.phone && !client.email && (
+                            <span className="text-sm text-slate-400">—</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

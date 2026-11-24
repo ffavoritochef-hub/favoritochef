@@ -18,6 +18,7 @@ import {
 import { ChevronLeft, Save, DollarSign, ArrowUpRight, ArrowDownRight, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { ExpenseExtraFields } from '@/components/finance/ExpenseExtraFields';
 
 export default function NewTransactionPage() {
   const [loading, setLoading] = useState(false);
@@ -31,7 +32,9 @@ export default function NewTransactionPage() {
     type: 'receivable' as 'receivable' | 'payable',
     date: localTodayIso(),
     status: 'pago',
-    event_id: '' as string | ''
+    event_id: '' as string | '',
+    category: '',
+    paid_by: '',
   });
 
   async function fetchEvents() {
@@ -85,7 +88,9 @@ export default function NewTransactionPage() {
     try {
       const payload = {
         ...formData,
-        event_id: formData.event_id && formData.event_id !== '0' ? formData.event_id : null
+        event_id: formData.event_id && formData.event_id !== '0' ? formData.event_id : null,
+        category: formData.category || null,
+        paid_by: formData.type === 'payable' ? formData.paid_by.trim() || null : null,
       };
 
       const { error } = await supabase
@@ -267,6 +272,14 @@ export default function NewTransactionPage() {
                 </p>
               </div>
 
+              {!isReceivable && (
+                <ExpenseExtraFields
+                  category={formData.category}
+                  paidBy={formData.paid_by}
+                  onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+                />
+              )}
+
               <div className="field-group lg:col-span-12">
                 <Label>Status da Transação</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 max-w-2xl">
@@ -296,7 +309,9 @@ export default function NewTransactionPage() {
                         : 'border-slate-200 text-slate-500 hover:text-slate-700 bg-white'
                     }`}
                   >
-                    <span className="font-semibold">⏳ Pendente</span>
+                    <span className="font-semibold">
+                      {!isReceivable && formData.paid_by.trim() ? '⏳ A reembolsar' : '⏳ Pendente'}
+                    </span>
                   </Button>
                 </div>
               </div>

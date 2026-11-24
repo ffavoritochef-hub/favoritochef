@@ -54,13 +54,15 @@ export default function DashboardPage() {
         const today = iso(now);
         const in30 = iso(new Date(now.getTime() + 30 * 86400000));
 
-        const [evRes, clientsRes, budRes, payRes, empRes, costRes] = await Promise.all([
+        const [evRes, clientsRes, budRes, payRes, empRes, costRes, reimbRes] = await Promise.all([
           supabase.from('events').select('id, name, date, start_time, status, guest_count, agreed_value, client:clients(name)').neq('status', 'Cancelado').gte('date', monthStart).order('date'),
           supabase.from('clients').select('id', { count: 'exact', head: true }).neq('is_active', false),
           supabase.from('budgets').select('id, event_id, total_value, proposal_status, deposit_percent, created_at, events(name, client:clients(name))').in('proposal_status', ['rascunho', 'enviada']).order('created_at', { ascending: false }).limit(5),
           supabase.from('event_payments').select('event_id, amount, status'),
           supabase.from('event_employees').select('event_id'),
           supabase.from('finance_transactions').select('amount, event_id, date').eq('type', 'payable').not('event_id', 'is', null).gte('date', monthStart).lte('date', monthEnd),
+          // despesas pagas do próprio bolso ainda não devolvidas
+          supabase.from('finance_transactions').select('amount, paid_by').eq('type', 'payable').not('paid_by', 'is', null).in('status', ['pendente', 'atrasado']),
         ]);
 
         const events = (evRes.data as any[]) || [];
@@ -77,6 +79,18 @@ export default function DashboardPage() {
         ((budRes.data as any[]) || []).forEach((b) => (depositByEvent[b.event_id] ??= Number(b.deposit_percent) || 30));
 
         const alerts: Alert[] = [];
+        if (money) {
+          const owed: Record<string, number> = {};
+          ((reimbRes.data as any[]) || []).forEach((t) => {
+            owed[t.paid_by] = (owed[t.paid_by] || 0) + Number(t.amount || 0);
+          });
+          Object.entries(owed).forEach(([person, v]) => {
+            alerts.push({
+              key: 'r' + person, tone: 'warning', icon: 'wallet', href: '/dashboard/finance',
+              text: `Reembolsar ${person}: ${formatBRL(v)} pago do próprio bolso`,
+            });
+          });
+        }
         events
           .filter((e) => e.date >= today && e.date <= in30 && ['Aprovado', 'Em andamento'].includes(e.status))
           .forEach((e) => {

@@ -120,8 +120,25 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
           setSignedAt(b.signed_at || null);
         } else {
           const last = lastRes && 'data' in lastRes ? lastRes.data : null;
+          // Veio da página do evento (?event_id=): já deixa o evento escolhido,
+          // mesmo que o status dele não esteja na lista padrão.
+          const preId = new URLSearchParams(window.location.search).get('event_id');
+          let pre = preId ? evs.find((e: { id: string }) => e.id === preId) : null;
+          if (preId && !pre) {
+            const { data: ev } = await supabase
+              .from('events')
+              .select('id, name, guest_count, status')
+              .eq('id', preId)
+              .maybeSingle();
+            if (ev) {
+              pre = ev;
+              evs.unshift(ev);
+              setEvents([...evs]);
+            }
+          }
           setForm((p) => ({
             ...p,
+            ...(pre ? { event_id: pre.id, adult_count: Number(pre.guest_count) || 0 } : {}),
             cover_message: last?.cover_message || defaultCoverMessage(tenant?.name || '', tenant?.responsible_name),
             included_items: last?.included_items || DEFAULT_INCLUDED_ITEMS,
             proposal_notes: last?.proposal_notes || DEFAULT_PROPOSAL_NOTES,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { localTodayIso } from '@/lib/leads';
 import { supabase } from '@/lib/supabase';
@@ -15,8 +15,10 @@ import {
   Eye,
   Pencil,
   FileText,
-  Trash2
+  Trash2,
+  Search,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { deleteEvent } from '@/lib/events';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +41,23 @@ export default function EventsPage() {
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
   const todayIso = localTodayIso();
+  const [q, setQ] = useState('');
+  const [statusF, setStatusF] = useState('all');
+  const [when, setWhen] = useState<'todos' | 'proximos' | 'passados'>('todos');
+
+  const visible = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return events.filter((e) => {
+      if (when === 'proximos' && e.date < todayIso) return false;
+      if (when === 'passados' && e.date >= todayIso) return false;
+      if (statusF !== 'all' && e.status !== statusF) return false;
+      if (term) {
+        const hay = [e.name, e.client?.name, e.type, e.address].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [events, q, statusF, when, todayIso]);
 
   useEffect(() => {
     fetchEvents();
@@ -96,7 +115,48 @@ export default function EventsPage() {
         </Button>
       </header>
 
-      {loading || events.length === 0 ? (
+      {!loading && events.length > 0 && (
+        <div className="flex flex-col lg:flex-row gap-2 px-1 sm:px-0">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+            <Input
+              placeholder="Buscar por evento, cliente, tipo ou local..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="pl-9 h-11 lg:h-10"
+            />
+          </div>
+          <div className="grid grid-cols-2 lg:flex gap-2">
+            <select
+              value={when}
+              onChange={(e) => setWhen(e.target.value as typeof when)}
+              className="h-11 lg:h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700"
+              aria-label="Período"
+            >
+              <option value="todos">Todos</option>
+              <option value="proximos">Próximos</option>
+              <option value="passados">Já realizados</option>
+            </select>
+            <select
+              value={statusF}
+              onChange={(e) => setStatusF(e.target.value)}
+              className="h-11 lg:h-10 rounded-xl border border-border bg-white px-3 text-sm text-slate-700"
+              aria-label="Status"
+            >
+              <option value="all">Qualquer status</option>
+              {Object.keys(statusStyles).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {!loading && events.length > 0 && visible.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-border bg-white p-8 text-center text-sm text-slate-500 mx-1 sm:mx-0">
+          Nenhum evento encontrado com esses filtros.
+        </div>
+      ) : loading || events.length === 0 ? (
         <div className="grid grid-cols-1 w-full">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64 text-slate-500 gap-4 rounded-2xl border border-border bg-white mx-1">
@@ -114,21 +174,21 @@ export default function EventsPage() {
       ) : (
         <>
           {/* Desktop: tabela dentro de um card */}
-          <div className="hidden lg:block bg-white border border-border shadow-card rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="hidden lg:block bg-white border border-border shadow-card rounded-2xl overflow-x-auto">
+            <table className="w-full text-sm table-fixed">
               <thead className="bg-slate-50/80 border-b border-border">
                 <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
-                  <th className="px-4 py-3 font-semibold w-[92px]">Data</th>
-                  <th className="px-4 py-3 font-semibold">Evento / Cliente</th>
-                  <th className="px-4 py-3 font-semibold whitespace-nowrap">Horário</th>
-                  <th className="px-4 py-3 font-semibold">Local</th>
-                  <th className="px-4 py-3 font-semibold text-right">Convid.</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold text-right">Ações</th>
+                  <th className="px-3 py-3 font-semibold w-[84px]">Data</th>
+                  <th className="px-3 py-3 font-semibold">Evento / Cliente</th>
+                  <th className="px-3 py-3 font-semibold whitespace-nowrap w-[108px]">Horário</th>
+                  <th className="px-3 py-3 font-semibold w-[22%]">Local</th>
+                  <th className="px-3 py-3 font-semibold text-right w-[70px]">Convid.</th>
+                  <th className="px-3 py-3 font-semibold w-[176px]">Status</th>
+                  <th className="px-3 py-3 font-semibold text-right w-[148px]">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {events.map((event) => {
+                {visible.map((event) => {
                   const d = new Date(event.date + 'T12:00:00');
                   const past = event.date < todayIso;
                   return (
@@ -137,34 +197,35 @@ export default function EventsPage() {
                       onClick={() => router.push(`/dashboard/events/${event.id}`)}
                       className={`cursor-pointer transition-colors hover:bg-primary/5 ${past ? 'opacity-60' : ''}`}
                     >
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-baseline gap-1.5">
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-baseline gap-1.5 whitespace-nowrap">
                           <span className="text-lg font-bold leading-none text-slate-900">{d.getDate()}</span>
                           <span className="text-[11px] uppercase font-bold tracking-wider text-primary">
                             {d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-400 font-medium">
-                          {d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')} · {d.getFullYear()}
+                        <span className="block text-[11px] text-slate-400 font-medium whitespace-nowrap capitalize">
+                          {d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}
+                          {d.getFullYear() !== new Date().getFullYear() ? ` · ${d.getFullYear()}` : ''}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 max-w-[260px]">
+                      <td className="px-3 py-2.5">
                         <p className="font-semibold text-slate-900 truncate" title={event.name}>{event.name}</p>
                         <p className="text-xs text-slate-500 truncate">{event.client?.name || 'Sem cliente'}</p>
                       </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-slate-600">
+                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
                         {event.start_time?.slice(0, 5)} – {event.end_time?.slice(0, 5)}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-600 max-w-[220px]">
+                      <td className="px-3 py-2.5 text-slate-600">
                         <span className="block truncate" title={event.address || ''}>{event.address || '—'}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">{event.guest_count || 0}</td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums">{event.guest_count || 0}</td>
+                      <td className="px-3 py-2.5">
                         <Badge className={`${statusStyles[event.status] || 'bg-slate-700 text-white border-slate-600 rounded-full'} border font-semibold text-[10px] px-2 py-0.5 uppercase tracking-tight whitespace-nowrap`}>
                           {event.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <Button asChild variant="ghost" size="icon" className="size-8 text-slate-500 hover:text-primary" title="Detalhes" aria-label="Detalhes">
                             <Link href={`/dashboard/events/${event.id}`}><Eye className="size-4" /></Link>
@@ -173,7 +234,7 @@ export default function EventsPage() {
                             <Link href={`/dashboard/events/${event.id}/edit`}><Pencil className="size-4" /></Link>
                           </Button>
                           <Button asChild variant="ghost" size="icon" className="size-8 text-slate-500 hover:text-primary" title="Orçamento" aria-label="Orçamento">
-                            <Link href="/dashboard/budgets/new"><FileText className="size-4" /></Link>
+                            <Link href={`/dashboard/budgets/new?event_id=${event.id}`}><FileText className="size-4" /></Link>
                           </Button>
                           <Button
                             variant="ghost"
@@ -196,7 +257,7 @@ export default function EventsPage() {
 
           {/* Celular/tablet: cartões */}
           <div className="grid grid-cols-1 gap-3 sm:gap-4 w-full lg:hidden">
-            {events.map((event) => (
+            {visible.map((event) => (
             <div 
               key={event.id} 
               className="group bg-white border-border shadow-card rounded-2xl p-4 sm:p-6 hover:shadow-card-hover transition-all w-full lg:p-4"
@@ -227,11 +288,11 @@ export default function EventsPage() {
                       </span>
                       <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 max-w-full font-medium lg:text-sm">
                         <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0 lg:w-4 lg:h-4" />
-                        <span className="truncate max-w-[220px] sm:max-w-none">{event.address}</span>
+                        <span className="truncate max-w-[220px] sm:max-w-none">{event.address || "Local não informado"}</span>
                       </span>
                       <span className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium lg:text-sm">
                         <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0 lg:w-4 lg:h-4" />
-                        {event.guest_count} convidados
+                        {event.guest_count ? `${event.guest_count} convidados` : "Convidados não informados"}
                       </span>
                     </div>
                   </div>
@@ -250,7 +311,7 @@ export default function EventsPage() {
                     </Link>
                   </Button>
                   <Button asChild className="h-11 rounded-xl font-semibold px-2 sm:px-5 bg-primary hover:bg-primary-dark text-white lg:h-9">
-                    <Link href="/dashboard/budgets/new">
+                    <Link href={`/dashboard/budgets/new?event_id=${event.id}`}>
                       <FileText className="hidden sm:block" />
                       Orçamento
                     </Link>

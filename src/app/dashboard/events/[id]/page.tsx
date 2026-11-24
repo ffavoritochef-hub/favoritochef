@@ -62,6 +62,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { deleteEvent } from '@/lib/events';
+import { EventExpenses } from '@/components/event/EventExpenses';
 
 const statusStyles: Record<string, string> = {
   'Orçamento enviado': 'bg-sky-600 text-white border-sky-600 rounded-full',
@@ -197,8 +198,8 @@ export default function EventDetailPage() {
     fetchAll();
   }, [eventId]);
 
-  async function fetchAll() {
-    setLoading(true);
+  async function fetchAll(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const [eventRes, paymentsRes, teamRes, expRes, instRes] = await Promise.all([
         supabase
@@ -390,7 +391,7 @@ export default function EventDetailPage() {
       }
       toast.success('Cronograma de pagamento salvo.');
       setScheduleDialogOpen(false);
-      await fetchAll();
+      await fetchAll(true);
     } catch (error: any) {
       toast.error(error.message || 'Falha ao salvar o cronograma.');
     } finally {
@@ -524,7 +525,7 @@ export default function EventDetailPage() {
       }
 
       setPaymentDialogOpen(false);
-      await fetchAll();
+      await fetchAll(true);
     } catch (error: any) {
       toast.error(error.message || 'Falha ao registrar pagamento.');
     } finally {
@@ -564,7 +565,7 @@ export default function EventDetailPage() {
       }
       setConfirmOpen(false);
       setConfirmData(null);
-      await fetchAll();
+      await fetchAll(true);
     } catch (error: any) {
       toast.error(error.message || 'Falha ao executar operação.');
     } finally {
@@ -643,7 +644,7 @@ export default function EventDetailPage() {
             asChild
             className="h-12 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold px-5 flex items-center gap-2 w-full sm:w-auto lg:h-10 lg:px-4"
           >
-            <Link href="/dashboard/budgets/new">
+            <Link href={`/dashboard/budgets/new?event_id=${eventId}`}>
               <Receipt className="w-4.5 h-4.5" />
               Orçamento / Proposta
             </Link>
@@ -684,11 +685,11 @@ export default function EventDetailPage() {
                 </p>
                 <p className="text-sm sm:text-base text-slate-600 flex items-start gap-2 font-medium lg:text-sm">
                   <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <span className="break-words">{event.address}</span>
+                  <span className="break-words">{event.address || 'Local não informado'}</span>
                 </p>
                 <p className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium lg:text-sm">
                   <Users className="w-4 h-4 text-primary shrink-0" />
-                  {event.guest_count} convidados
+                  {event.guest_count ? `${event.guest_count} convidados` : 'Convidados não informados'}
                 </p>
               </div>
             </div>
@@ -1220,52 +1221,17 @@ export default function EventDetailPage() {
 
             <div>
               <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-                Despesas vinculadas ({expenses.length})
+                Despesas do evento ({expenses.length})
               </h4>
-              {expenses.length === 0 ? (
-                <p className="text-sm text-slate-500 rounded-xl bg-slate-50 border border-border p-4 text-center">
-                  Nenhuma despesa vinculada a este evento.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {expenses.slice(0, 8).map((exp) => (
-                    <div
-                      key={exp.id}
-                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border bg-white hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-slate-900 text-sm truncate">
-                          {exp.description || 'Sem descrição'}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {new Date(exp.date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                          {exp.status ? ` • ${exp.status}` : ''}
-                        </p>
-                      </div>
-                      <span className="text-sm font-bold text-destructive shrink-0">
-                        -{formatCurrency(Number(exp.amount))}
-                      </span>
-                    </div>
-                  ))}
-                  {expenses.length > 8 && (
-                    <p className="text-xs text-slate-500 text-center pt-1">
-                      +{expenses.length - 8} despesa(s) listada(s) no Financeiro.
-                    </p>
-                  )}
-                </div>
-              )}
+              <EventExpenses
+                eventId={eventId}
+                eventName={event.name}
+                eventDate={event.date}
+                expenses={expenses}
+                peopleSuggestions={employees.map((e) => e.name).filter(Boolean)}
+                onChanged={() => fetchAll(true)}
+              />
             </div>
-
-            <Button
-              asChild
-              variant="outline"
-              className="w-full h-11 rounded-xl font-semibold border-slate-200 text-slate-700 hover:bg-slate-50 lg:h-9"
-            >
-              <Link href={`/dashboard/finance/new?type=payable&event_id=${eventId}`}>
-                <PlusCircle className="w-4.5 h-4.5 mr-2" />
-                Lançar Despesa para este Evento
-              </Link>
-            </Button>
           </CardContent>
         </Card>
       </div>
