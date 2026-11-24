@@ -47,7 +47,8 @@ export default function DashboardPage() {
     (async () => {
       try {
         const now = new Date();
-        const iso = (d: Date) => d.toISOString().slice(0, 10);
+        // data no fuso do aparelho (toISOString usaria UTC e viraria o dia às 21h)
+        const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
         const monthStart = iso(new Date(now.getFullYear(), now.getMonth(), 1));
         const monthEnd = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
         const today = iso(now);

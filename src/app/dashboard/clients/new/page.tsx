@@ -19,18 +19,32 @@ export default function NewClientPage() {
     document: '',
     email: '',
     phone: '',
-    whatsapp: ''
+    whatsapp: '',
+    address: ''
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const name = formData.name.trim();
+    if (!name) {
+      toast.error('Informe o nome do cliente.');
+      return;
+    }
     setLoading(true);
 
     try {
+      // Só o nome é obrigatório; campos vazios vão como nulo.
+      const clean = (v: string) => v.trim() || null;
       const { error } = await supabase
         .from('clients')
-        .insert([formData])
-        .select();
+        .insert([{
+          name,
+          document: clean(formData.document),
+          email: clean(formData.email),
+          phone: clean(formData.phone),
+          whatsapp: clean(formData.whatsapp),
+          address: clean(formData.address),
+        }]);
 
       if (error) throw error;
 
@@ -53,7 +67,7 @@ export default function NewClientPage() {
         </Button>
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Novo Cliente</h1>
-          <p className="text-sm sm:text-base text-slate-500">Preencha os dados básicos para cadastro.</p>
+          <p className="text-sm sm:text-base text-slate-500">Só o nome é obrigatório; o restante pode ser completado depois.</p>
         </div>
       </header>
 
@@ -80,13 +94,13 @@ export default function NewClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="document">CPF ou CNPJ</Label>
+                <Label htmlFor="document">CPF ou CNPJ <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="document"
+                  inputMode="numeric"
                   placeholder="000.000.000-00"
                   value={formData.document}
                   onChange={(e) => setFormData({ ...formData, document: e.target.value })}
-                  required
                 />
               </div>
               <div className="field-group">
@@ -115,6 +129,15 @@ export default function NewClientPage() {
                   placeholder="(00) 90000-0000"
                   value={formData.whatsapp}
                   onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                />
+              </div>
+              <div className="field-group md:col-span-2">
+                <Label htmlFor="address">Endereço <span className="text-slate-400 font-normal">(opcional)</span></Label>
+                <Input
+                  id="address"
+                  placeholder="Rua, Número, Bairro - Cidade"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 />
               </div>
             </div>

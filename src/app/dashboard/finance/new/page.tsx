@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { localTodayIso } from '@/lib/leads';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,7 +29,7 @@ export default function NewTransactionPage() {
     description: '',
     amount: 0,
     type: 'receivable' as 'receivable' | 'payable',
-    date: new Date().toISOString().split('T')[0],
+    date: localTodayIso(),
     status: 'pago',
     event_id: '' as string | ''
   });

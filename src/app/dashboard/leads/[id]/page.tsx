@@ -296,13 +296,13 @@ export default function LeadDetailPage() {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .insert([{ name: lead.name, whatsapp: lead.phone, phone: '', email: '', document: '' }])
+        .insert([{ name: lead.name.trim(), whatsapp: lead.phone || null }])
         .select('id')
         .single();
       if (error) throw error;
       await patchLead({ status: 'convertido', client_id: data.id, next_contact_at: null });
       toast.success(`${lead.name} agora é um cliente!`, {
-        action: { label: 'Criar evento', onClick: () => router.push('/dashboard/events/new') },
+        action: { label: 'Criar evento', onClick: () => router.push(`/dashboard/events/new?client_id=${data.id}`) },
       });
     } catch (e) {
       toast.error('Erro ao converter: ' + (e as Error).message);

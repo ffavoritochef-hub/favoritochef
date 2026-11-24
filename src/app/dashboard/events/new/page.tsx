@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { useScheduleConflicts, ScheduleConflictAlert, StaffSuggestionBox } from '@/components/EventRulesAlerts';
+import { validateStatusTransition } from '@/lib/buffet-rules';
 
 const eventTypes = [
   'Casamento',
@@ -30,12 +31,12 @@ const eventTypes = [
   'Outros'
 ];
 
+// Mesmos nomes de status usados no resto do sistema (lib/buffet-rules).
+// Evento novo começa no início do fluxo; os demais status vêm pela edição.
 const eventStatuses = [
   'Orçamento enviado',
-  'Confirmado',
-  'Em andamento',
-  'Concluído',
-  'Cancelado'
+  'Aguardando aprovação',
+  'Aprovado',
 ];
 
 export default function NewEventPage() {
@@ -71,6 +72,11 @@ export default function NewEventPage() {
       .eq('is_active', true)
       .order('name');
     setClients(data || []);
+    // ?client_id= (ex.: vindo da conversão de um lead) já deixa o cliente escolhido
+    const pre = new URLSearchParams(window.location.search).get('client_id');
+    if (pre && (data || []).some((c) => c.id === pre)) {
+      setFormData((prev) => ({ ...prev, client_id: pre }));
+    }
   }
 
   async function fetchEmployees() {
@@ -103,6 +109,27 @@ export default function NewEventPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.client_id) {
+      toast.error('Selecione o cliente do evento. Se ele ainda não existe, cadastre em Clientes > Novo Cliente.');
+      return;
+    }
+    if (!formData.name.trim()) {
+      toast.error('Informe o nome do evento.');
+      return;
+    }
+    if (!formData.date || !formData.start_time || !formData.end_time) {
+      toast.error('Informe a data e os horários de início e término.');
+      return;
+    }
+    const tr = validateStatusTransition('Orçamento enviado', formData.status, {
+      agreedValue: Number(formData.agreed_value) || 0,
+      receivedTotal: 0,
+      depositPercent: 0,
+    });
+    if (!tr.allowed) {
+      toast.error(tr.reason);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -113,7 +140,15 @@ export default function NewEventPage() {
 
       const { data, error } = await supabase
         .from('events')
-        .insert([formData])
+        .insert([{
+          ...formData,
+          name: formData.name.trim(),
+          type: formData.type || null,
+          address: formData.address.trim() || null,
+          observations: formData.observations.trim() || null,
+          guest_count: Math.max(0, Math.floor(Number(formData.guest_count) || 0)),
+          agreed_value: Math.max(0, Number(formData.agreed_value) || 0),
+        }])
         .select('id');
 
       if (error) throw error;
@@ -141,7 +176,7 @@ export default function NewEventPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-16 sm:pb-8">
+    <div className="ev-compact max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-16 sm:pb-8 lg:space-y-5">
       <header className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4 min-w-0">
           <Button asChild variant="outline" size="icon" className="size-11 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 shrink-0">
@@ -150,46 +185,46 @@ export default function NewEventPage() {
             </Link>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Novo Evento</h1>
-            <p className="text-sm sm:text-base text-slate-500 truncate">Agende um novo buffet e defina os detalhes.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate lg:text-2xl">Novo Evento</h1>
+            <p className="text-sm sm:text-base text-slate-500 truncate lg:text-sm">Agende um novo buffet e defina os detalhes.</p>
           </div>
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8 lg:space-y-5">
         <Card className="shadow-card border-border overflow-hidden bg-white">
-          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6">
+          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
-                <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
-                  <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900 lg:text-base">
+                  <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary lg:size-8">
                     <Calendar className="size-5" />
                   </span>
                   Informações do Evento
                 </CardTitle>
-                <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
+                <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px] lg:pl-[42px]">
                   Preencha os dados para cadastrar um novo evento no sistema.
                 </CardDescription>
               </div>
               {formData.agreed_value > 0 && (
                 <div className="pl-0 sm:pl-6 pt-1 sm:pt-0 sm:border-l sm:border-border">
                   <p className="text-xs text-slate-500 mb-0.5">Valor Fechado</p>
-                  <p className="text-xl sm:text-2xl font-bold text-primary whitespace-nowrap">
+                  <p className="text-xl sm:text-2xl font-bold text-primary whitespace-nowrap lg:text-xl">
                     {formatCurrency(formData.agreed_value)}
                   </p>
                 </div>
               )}
             </div>
           </CardHeader>
-          <CardContent className="px-5 sm:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+          <CardContent className="px-5 sm:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 lg:px-5 lg:py-5 lg:space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-4">
               <div className="field-group lg:col-span-5 xl:col-span-4">
                 <Label>Cliente</Label>
                 <Select
                   value={formData.client_id}
                   onValueChange={(val) => setFormData({ ...formData, client_id: val })}
                 >
-                  <SelectTrigger className="h-12 rounded-xl">
+                  <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue placeholder="Selecione o cliente" />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-border text-slate-900">
@@ -200,6 +235,9 @@ export default function NewEventPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Link href="/dashboard/clients/new" className="text-xs font-medium text-primary hover:underline">
+                  {clients.length === 0 ? 'Nenhum cliente cadastrado — cadastrar cliente' : '+ Cadastrar novo cliente'}
+                </Link>
               </div>
 
               <div className="field-group lg:col-span-7 xl:col-span-8">
@@ -219,7 +257,7 @@ export default function NewEventPage() {
                   value={formData.type}
                   onValueChange={(val) => setFormData({ ...formData, type: val })}
                 >
-                  <SelectTrigger className="h-12 rounded-xl">
+                  <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-border text-slate-900">
@@ -236,7 +274,7 @@ export default function NewEventPage() {
                   value={formData.status}
                   onValueChange={(val) => setFormData({ ...formData, status: val })}
                 >
-                  <SelectTrigger className="h-12 rounded-xl">
+                  <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue placeholder="Selecione o status" />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-border text-slate-900">
@@ -315,14 +353,13 @@ export default function NewEventPage() {
               <div className="field-group lg:col-span-8 xl:col-span-8">
                 <Label htmlFor="address" className="flex items-center gap-1.5">
                   <MapPin className="size-4 text-primary" />
-                  Endereço Completo
+                  Endereço Completo <span className="text-slate-400 font-normal">(opcional)</span>
                 </Label>
                 <Input
                   id="address"
                   placeholder="Rua, Número, Bairro, Cidade"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  required
                 />
               </div>
 
@@ -337,7 +374,6 @@ export default function NewEventPage() {
                   min="0"
                   value={formData.guest_count || ''}
                   onChange={(e) => setFormData({ ...formData, guest_count: Number(e.target.value) })}
-                  required
                 />
               </div>
 
@@ -346,7 +382,7 @@ export default function NewEventPage() {
                 <textarea
                   id="obs"
                   rows={5}
-                  className="w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none disabled:bg-muted/50 disabled:opacity-50"
+                  className="w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none disabled:bg-muted/50 disabled:opacity-50 lg:text-sm"
                   placeholder="Detalhes adicionais do evento, preferências alimentares, itens inclusos, ponto de contato, etc..."
                   value={formData.observations}
                   onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
@@ -355,12 +391,12 @@ export default function NewEventPage() {
             </div>
 
             {(formData.guest_count > 0 || formData.agreed_value > 0) && (
-              <div className="rounded-2xl border-2 border-primary/20 bg-primary/[0.03] p-4 sm:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+              <div className="rounded-2xl border-2 border-primary/20 bg-primary/[0.03] p-4 sm:p-6 lg:p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 lg:gap-4">
                   {formData.guest_count > 0 && (
                     <div>
                       <p className="text-sm text-slate-500 mb-1">Convidados</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-slate-900">
+                      <p className="text-2xl sm:text-3xl font-bold text-slate-900 lg:text-2xl">
                         {formData.guest_count} pessoas
                       </p>
                     </div>
@@ -368,7 +404,7 @@ export default function NewEventPage() {
                   {formData.agreed_value > 0 && (
                     <div>
                       <p className="text-sm text-slate-500 mb-1">Valor Total</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-primary">
+                      <p className="text-2xl sm:text-3xl font-bold text-primary lg:text-2xl">
                         {formatCurrency(formData.agreed_value)}
                       </p>
                     </div>
@@ -376,7 +412,7 @@ export default function NewEventPage() {
                   {formData.guest_count > 0 && formData.agreed_value > 0 && (
                     <div>
                       <p className="text-sm text-slate-500 mb-1">Média por Pessoa</p>
-                      <p className="text-2xl sm:text-3xl font-bold text-violet-700">
+                      <p className="text-2xl sm:text-3xl font-bold text-violet-700 lg:text-2xl">
                         {formatCurrency(formData.agreed_value / formData.guest_count)}
                       </p>
                     </div>
@@ -386,13 +422,13 @@ export default function NewEventPage() {
             )}
           <ScheduleConflictAlert conflicts={conflicts} />
           </CardContent>
-          <CardFooter className="bg-slate-50/60 border-t border-border px-5 sm:px-8 py-5 sm:py-6 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end sm:gap-4">
-            <Button asChild variant="outline" className="w-full sm:w-auto h-12 border-slate-200 text-slate-700 hover:bg-slate-50">
+          <CardFooter className="bg-slate-50/60 border-t border-border px-5 sm:px-8 py-5 sm:py-6 flex flex-col-reverse sm:flex-row gap-3 sm:justify-end sm:gap-4 lg:px-5 lg:py-3.5">
+            <Button asChild variant="outline" className="w-full sm:w-auto h-12 border-slate-200 text-slate-700 hover:bg-slate-50 lg:h-10">
               <Link href="/dashboard/events">Cancelar</Link>
             </Button>
             <Button
               type="submit"
-              className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold shadow-sm flex items-center justify-center gap-2"
+              className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold shadow-sm flex items-center justify-center gap-2 lg:h-10"
               disabled={loading}
             >
               <Save className="size-5" />
@@ -402,24 +438,24 @@ export default function NewEventPage() {
         </Card>
 
         <Card className="shadow-card border-border overflow-hidden bg-white">
-          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6">
+          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
             <div>
-              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
-                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-highlight/10 text-highlight">
+              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900 lg:text-base">
+                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-highlight/10 text-highlight lg:size-8">
                   <HardHat className="size-5" />
                 </span>
                 Equipe do Evento
               </CardTitle>
-              <p className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
+              <p className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px] lg:pl-[42px]">
                 Selecione os funcionários que irão trabalhar neste evento.
               </p>
             </div>
           </CardHeader>
-          <CardContent className="px-5 sm:px-8 py-6 sm:py-8 space-y-4 sm:space-y-5">
+          <CardContent className="px-5 sm:px-8 py-6 sm:py-8 space-y-4 sm:space-y-5 lg:px-5 lg:py-5">
             <StaffSuggestionBox guests={Number(formData.guest_count)} allocated={selectedEmployees.length} />
             {employees.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center">
-                <HardHat className="w-12 h-12 mb-3 text-primary/40" />
+              <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center lg:py-6">
+                <HardHat className="w-12 h-12 mb-3 text-primary/40 lg:h-10 lg:w-10" />
                 <p className="font-semibold text-slate-700">Nenhum funcionário cadastrado.</p>
                 <p className="text-xs sm:text-sm mt-1">
                   Cadastre sua equipe em{' '}
@@ -449,11 +485,9 @@ export default function NewEventPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
-                          <div className="w-11 h-11 shrink-0 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                          <div className="w-11 h-11 shrink-0 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center lg:size-9">
                             <HardHat
-                              className={`w-5 h-5 ${
-                                isSelected ? 'text-primary' : 'text-primary/70'
-                              }`}
+                              className={`w-5 h-5 ${ isSelected ? 'text-primary' : 'text-primary/70' } lg:w-4 lg:h-4`}
                             />
                           </div>
                           <div className="min-w-0 flex-1">
@@ -486,7 +520,7 @@ export default function NewEventPage() {
                             placeholder="Ex: Responsável pela carne, Chef executivo"
                             value={sel?.specific_role || ''}
                             onChange={(e) => updateSpecificRole(emp.id, e.target.value)}
-                            className="h-11 rounded-xl text-sm"
+                            className="h-11 rounded-xl text-sm lg:h-9"
                           />
                         </div>
                       )}

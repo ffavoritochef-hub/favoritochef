@@ -72,18 +72,22 @@ export default function EditClientPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!params?.id) return;
+    if (!formData.name.trim()) {
+      toast.error('Informe o nome do cliente.');
+      return;
+    }
     setLoading(true);
 
     try {
       const { error } = await supabase
         .from('clients')
         .update({
-          name: formData.name,
-          document: formData.document || null,
-          email: formData.email || null,
-          phone: formData.phone || null,
-          whatsapp: formData.whatsapp || null,
-          address: formData.address || null,
+          name: formData.name.trim(),
+          document: formData.document.trim() || null,
+          email: formData.email.trim() || null,
+          phone: formData.phone.trim() || null,
+          whatsapp: formData.whatsapp.trim() || null,
+          address: formData.address?.trim() || null,
         })
         .eq('id', params.id);
 

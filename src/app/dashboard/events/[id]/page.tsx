@@ -469,7 +469,6 @@ export default function EventDetailPage() {
               ? 'recebido'
               : 'pendente',
           event_id: eventId,
-          category: 'Vendas de Evento',
         };
         if (editingPayment?.register_in_finance) {
           const existing = payments.find(
@@ -484,17 +483,19 @@ export default function EventDetailPage() {
             if (error) throw error;
             financeId = fid;
           } else {
-            const { data } = await supabase
+            const { data, error } = await supabase
               .from('finance_transactions')
               .insert([ftPayload])
               .select('id');
+            if (error) throw error;
             financeId = data?.[0]?.id || null;
           }
         } else {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('finance_transactions')
             .insert([ftPayload])
             .select('id');
+          if (error) throw error;
           financeId = data?.[0]?.id || null;
         }
       }
@@ -573,9 +574,9 @@ export default function EventDetailPage() {
 
   if (loading || !event) {
     return (
-      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-16 sm:pb-8">
-        <div className="animate-pulse space-y-6 sm:space-y-8">
-          <div className="h-12 bg-slate-200 rounded-2xl w-3/4"></div>
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-16 sm:pb-8 lg:space-y-5">
+        <div className="animate-pulse space-y-6 sm:space-y-8 lg:space-y-5">
+          <div className="h-12 bg-slate-200 rounded-2xl w-3/4 lg:h-10"></div>
           <div className="h-40 bg-slate-200 rounded-2xl"></div>
           <div className="h-64 bg-slate-200 rounded-2xl"></div>
           <div className="h-64 bg-slate-200 rounded-2xl"></div>
@@ -607,7 +608,7 @@ export default function EventDetailPage() {
           </Button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-slate-900 break-words">
+              <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-slate-900 break-words lg:text-2xl">
                 {event.name}
               </h1>
               <Badge
@@ -619,7 +620,7 @@ export default function EventDetailPage() {
                 {event.status}
               </Badge>
             </div>
-            <p className="text-slate-500 mt-0.5 text-xs sm:text-base leading-relaxed truncate">
+            <p className="text-slate-500 mt-0.5 text-xs sm:text-base leading-relaxed truncate lg:text-sm">
               {event.type || 'Evento'} •{' '}
               <span className="font-semibold text-slate-700">
                 {event.client?.name || 'Cliente não informado'}
@@ -631,7 +632,7 @@ export default function EventDetailPage() {
           <Button
             asChild
             variant="outline"
-            className="h-12 border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold px-5 flex items-center gap-2 w-full sm:w-auto"
+            className="h-12 border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold px-5 flex items-center gap-2 w-full sm:w-auto lg:h-10 lg:px-4"
           >
             <Link href={`/dashboard/events/${eventId}/edit`}>
               <Edit className="w-4.5 h-4.5" />
@@ -640,7 +641,7 @@ export default function EventDetailPage() {
           </Button>
           <Button
             asChild
-            className="h-12 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold px-5 flex items-center gap-2 w-full sm:w-auto"
+            className="h-12 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold px-5 flex items-center gap-2 w-full sm:w-auto lg:h-10 lg:px-4"
           >
             <Link href="/dashboard/budgets/new">
               <Receipt className="w-4.5 h-4.5" />
@@ -650,7 +651,7 @@ export default function EventDetailPage() {
           <Button
             variant="outline"
             onClick={() => setDeleteEventOpen(true)}
-            className="h-12 border-slate-200 text-slate-500 hover:text-destructive hover:bg-destructive/5 rounded-xl font-semibold px-4 flex items-center gap-2 w-full sm:w-auto"
+            className="h-12 border-slate-200 text-slate-500 hover:text-destructive hover:bg-destructive/5 rounded-xl font-semibold px-4 flex items-center gap-2 w-full sm:w-auto lg:h-10"
           >
             <Trash2 className="w-4.5 h-4.5" />
             Excluir
@@ -661,10 +662,10 @@ export default function EventDetailPage() {
       {/* RESUMO DATA + CARDS VALOR E PROGRESSO */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-5 w-full">
         <Card className="bg-white border-border shadow-card rounded-2xl lg:col-span-4 overflow-hidden">
-          <CardContent className="p-5 sm:p-6">
+          <CardContent className="p-5 sm:p-6 lg:p-4">
             <div className="flex items-start gap-4 sm:gap-5">
-              <div className="flex flex-col items-center justify-center gap-0.5 w-20 sm:w-24 h-20 sm:h-24 rounded-xl bg-primary/10 border-primary/20 shrink-0">
-                <span className="text-2xl sm:text-3xl font-bold leading-none text-slate-900">
+              <div className="flex flex-col items-center justify-center gap-0.5 w-20 sm:w-24 h-20 sm:h-24 rounded-xl bg-primary/10 border-primary/20 shrink-0 lg:w-16 lg:h-16">
+                <span className="text-2xl sm:text-3xl font-bold leading-none text-slate-900 lg:text-2xl">
                   {new Date(event.date + 'T12:00:00').getDate()}
                 </span>
                 <span className="text-[11px] sm:text-xs uppercase font-bold tracking-widest text-primary">
@@ -677,15 +678,15 @@ export default function EventDetailPage() {
                 </span>
               </div>
               <div className="space-y-2 flex-1 min-w-0">
-                <p className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium">
+                <p className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium lg:text-sm">
                   <Clock className="w-4 h-4 text-primary shrink-0" />
                   {event.start_time?.slice(0, 5)} - {event.end_time?.slice(0, 5)}
                 </p>
-                <p className="text-sm sm:text-base text-slate-600 flex items-start gap-2 font-medium">
+                <p className="text-sm sm:text-base text-slate-600 flex items-start gap-2 font-medium lg:text-sm">
                   <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <span className="break-words">{event.address}</span>
                 </p>
-                <p className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium">
+                <p className="text-sm sm:text-base text-slate-600 flex items-center gap-2 font-medium lg:text-sm">
                   <Users className="w-4 h-4 text-primary shrink-0" />
                   {event.guest_count} convidados
                 </p>
@@ -695,7 +696,7 @@ export default function EventDetailPage() {
         </Card>
 
         <Card className="bg-white border-border shadow-card rounded-2xl lg:col-span-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-1.5 sm:pb-2 pt-4 sm:pt-5 px-5 sm:px-6">
+          <CardHeader className="flex flex-row items-center justify-between pb-1.5 sm:pb-2 pt-4 sm:pt-5 px-5 sm:px-6 lg:px-4">
             <CardTitle className="text-xs text-slate-500 uppercase font-semibold tracking-wider">
               Valor Fechado
             </CardTitle>
@@ -703,8 +704,8 @@ export default function EventDetailPage() {
               <DollarSign className="w-4.5 h-4.5 text-primary" />
             </div>
           </CardHeader>
-          <CardContent className="pt-0 pb-4 sm:pb-5 px-5 sm:px-6">
-            <p className="text-2xl sm:text-3xl font-bold text-primary break-all">
+          <CardContent className="pt-0 pb-4 sm:pb-5 px-5 sm:px-6 lg:px-4">
+            <p className="text-2xl sm:text-3xl font-bold text-primary break-all lg:text-2xl">
               {formatCurrency(totals.agreed)}
             </p>
             <div className="mt-3 space-y-1.5">
@@ -734,8 +735,8 @@ export default function EventDetailPage() {
                 <TrendingUp className="w-4 h-4 text-success" />
               </div>
             </CardHeader>
-            <CardContent className="pt-0 pb-4 px-5">
-              <p className="text-xl sm:text-2xl font-bold text-success break-all">
+            <CardContent className="pt-0 pb-4 px-5 lg:px-4">
+              <p className="text-xl sm:text-2xl font-bold text-success break-all lg:text-xl">
                 {formatCurrency(totals.received)}
               </p>
               {totals.allExpected > totals.received && (
@@ -755,11 +756,9 @@ export default function EventDetailPage() {
                 <Wallet className="w-4 h-4 text-warning" />
               </div>
             </CardHeader>
-            <CardContent className="pt-0 pb-4 px-5">
+            <CardContent className="pt-0 pb-4 px-5 lg:px-4">
               <p
-                className={`text-xl sm:text-2xl font-bold break-all ${
-                  totals.balance <= 0 ? 'text-success' : 'text-warning'
-                }`}
+                className={`text-xl sm:text-2xl font-bold break-all ${ totals.balance <= 0 ? 'text-success' : 'text-warning' } lg:text-xl`}
               >
                 {formatCurrency(Math.max(0, totals.balance))}
               </p>
@@ -786,16 +785,16 @@ export default function EventDetailPage() {
 
       {/* CRONOGRAMA DE PAGAMENTO */}
       <Card className="bg-white border-border shadow-card rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6">
+        <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
-                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900 lg:text-base">
+                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary lg:size-8">
                   <CalendarClock className="size-5" />
                 </span>
                 Cronograma de Pagamento
               </CardTitle>
-              <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
+              <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px] lg:pl-[42px]">
                 Datas, percentuais e valores combinados com o cliente.
               </CardDescription>
             </div>
@@ -803,7 +802,7 @@ export default function EventDetailPage() {
               type="button"
               variant="outline"
               onClick={openScheduleEditor}
-              className="h-12 border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl font-semibold px-5 w-full sm:w-auto flex items-center gap-2"
+              className="h-12 border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl font-semibold px-5 w-full sm:w-auto flex items-center gap-2 lg:h-10 lg:px-4"
             >
               {installments.length > 0 ? (
                 <Pencil className="w-4.5 h-4.5" />
@@ -814,10 +813,10 @@ export default function EventDetailPage() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="px-3 sm:px-8 py-5 sm:py-6">
+        <CardContent className="px-3 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
           {schedule.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center px-4">
-              <CalendarClock className="w-12 h-12 mb-3 text-primary/30" />
+            <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center px-4 lg:py-6">
+              <CalendarClock className="w-12 h-12 mb-3 text-primary/30 lg:h-10 lg:w-10" />
               <p className="font-semibold text-slate-700">
                 Nenhuma parcela combinada.
               </p>
@@ -862,7 +861,7 @@ export default function EventDetailPage() {
                       <Button
                         type="button"
                         onClick={() => openInstallmentPayment(i)}
-                        className="h-10 bg-success hover:bg-success/90 text-white rounded-xl font-semibold px-4 flex items-center gap-1.5"
+                        className="h-10 bg-success hover:bg-success/90 text-white rounded-xl font-semibold px-4 flex items-center gap-1.5 lg:h-9"
                       >
                         <Banknote className="size-4" />
                         Receber
@@ -884,34 +883,34 @@ export default function EventDetailPage() {
 
       {/* SEÇÃO PAGAMENTOS */}
       <Card className="bg-white border-border shadow-card rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6">
+        <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
-                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-success/10 text-success">
+              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900 lg:text-base">
+                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-success/10 text-success lg:size-8">
                   <Banknote className="size-5" />
                 </span>
                 Pagamentos do Cliente
               </CardTitle>
-              <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
+              <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px] lg:pl-[42px]">
                 Controle os recebimentos parciais e o saldo restante do evento.
               </CardDescription>
             </div>
             <Button
               type="button"
               onClick={openNewPayment}
-              className="bg-primary hover:bg-primary-dark text-white rounded-xl h-12 font-semibold flex items-center gap-2 w-full sm:w-auto px-5 text-base"
+              className="bg-primary hover:bg-primary-dark text-white rounded-xl h-12 font-semibold flex items-center gap-2 w-full sm:w-auto px-5 text-base lg:h-10 lg:text-sm lg:px-4"
             >
-              <PlusCircle className="w-5 h-5 shrink-0" />
+              <PlusCircle className="w-5 h-5 shrink-0 lg:w-4 lg:h-4" />
               Adicionar Pagamento
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="px-3 sm:px-5 sm:px-8 py-5 sm:py-6">
+        <CardContent className="px-3 sm:px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
           {payments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center">
-              <Receipt className="w-14 h-14 mb-4 shrink-0 text-primary/30" />
-              <p className="text-base sm:text-lg font-semibold text-slate-900">
+              <Receipt className="w-14 h-14 mb-4 shrink-0 text-primary/30 lg:w-12 lg:h-12" />
+              <p className="text-base sm:text-lg font-semibold text-slate-900 lg:text-base">
                 Nenhum pagamento lançado.
               </p>
               <p className="text-xs sm:text-sm text-slate-500 mt-2 max-w-md">
@@ -954,7 +953,7 @@ export default function EventDetailPage() {
                       </div>
                     </div>
                     <div className="flex items-end justify-between gap-3 border-t border-slate-100 pt-3 mt-4">
-                      <span className="text-xl sm:text-2xl font-bold text-success">
+                      <span className="text-xl sm:text-2xl font-bold text-success lg:text-xl">
                         +{formatCurrency(Number(p.amount))}
                       </span>
                       <div className="flex items-center gap-1.5">
@@ -981,7 +980,7 @@ export default function EventDetailPage() {
                   </div>
                 ))}
               </div>
-              <div className="hidden md:block overflow-x-auto -mx-5 sm:-mx-8 px-5 sm:px-8">
+              <div className="hidden md:block overflow-x-auto -mx-5 sm:-mx-8 px-5 sm:px-8 lg:px-5">
                 <Table className="min-w-[720px]">
                   <TableHeader className="bg-transparent">
                     <TableRow className="hover:bg-transparent border-slate-100">
@@ -1034,7 +1033,7 @@ export default function EventDetailPage() {
                           {p.notes || <span className="text-slate-400">—</span>}
                         </TableCell>
                         <TableCell className="text-right">
-                          <span className="font-bold text-success text-base">
+                          <span className="font-bold text-success text-base lg:text-sm">
                             +{formatCurrency(Number(p.amount))}
                           </span>
                         </TableCell>
@@ -1074,23 +1073,23 @@ export default function EventDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 w-full">
         {/* EQUIPE */}
         <Card className="bg-white border-border shadow-card rounded-2xl overflow-hidden">
-          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6">
+          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
-                <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
-                  <span className="inline-flex size-10 items-center justify-center rounded-xl bg-highlight/10 text-highlight">
+                <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900 lg:text-base">
+                  <span className="inline-flex size-10 items-center justify-center rounded-xl bg-highlight/10 text-highlight lg:size-8">
                     <HardHat className="size-5" />
                   </span>
                   Equipe Alocada
                 </CardTitle>
-                <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
+                <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px] lg:pl-[42px]">
                   Funcionários escalados para trabalhar neste evento.
                 </CardDescription>
               </div>
               <Button
                 asChild
                 variant="outline"
-                className="h-11 border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl font-semibold px-5 w-full sm:w-auto flex items-center gap-2"
+                className="h-11 border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl font-semibold px-5 w-full sm:w-auto flex items-center gap-2 lg:h-9 lg:px-4"
               >
                 <Link href={`/dashboard/events/${eventId}/edit`}>
                   <UserCheck className="w-4.5 h-4.5" />
@@ -1099,10 +1098,10 @@ export default function EventDetailPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="px-5 sm:px-8 py-5 sm:py-6">
+          <CardContent className="px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
             {employees.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center">
-                <HardHat className="w-12 h-12 mb-3 text-highlight/30" />
+              <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-2xl bg-slate-50/40 text-slate-500 text-center lg:py-6">
+                <HardHat className="w-12 h-12 mb-3 text-highlight/30 lg:h-10 lg:w-10" />
                 <p className="font-semibold text-slate-700">
                   Nenhum funcionário alocado.
                 </p>
@@ -1118,8 +1117,8 @@ export default function EventDetailPage() {
                     className="flex items-center justify-between gap-3 p-4 rounded-2xl border border-border hover:border-primary/30 hover:bg-primary/[0.02] transition-all"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-11 h-11 shrink-0 rounded-full bg-highlight/10 border border-highlight/20 flex items-center justify-center">
-                        <HardHat className="w-5 h-5 text-highlight" />
+                      <div className="w-11 h-11 shrink-0 rounded-full bg-highlight/10 border border-highlight/20 flex items-center justify-center lg:size-9">
+                        <HardHat className="w-5 h-5 text-highlight lg:w-4 lg:h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-slate-900 break-words">
@@ -1153,26 +1152,26 @@ export default function EventDetailPage() {
 
         {/* RENTABILIDADE / DESPESAS */}
         <Card className="bg-white border-border shadow-card rounded-2xl overflow-hidden">
-          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6">
+          <CardHeader className="bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6 lg:px-5 lg:py-3.5">
             <div>
-              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
-                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700 border border-violet-200">
+              <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900 lg:text-base">
+                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700 border border-violet-200 lg:size-8">
                   <Sparkles className="size-5" />
                 </span>
                 Despesas &amp; Rentabilidade
               </CardTitle>
-              <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px]">
+              <CardDescription className="mt-2 text-slate-500 text-sm pl-12 sm:pl-[52px] lg:pl-[42px]">
                 Comparativo do valor fechado com despesas vinculadas ao evento.
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="px-5 sm:px-8 py-5 sm:py-6 space-y-5">
+          <CardContent className="px-5 sm:px-8 py-5 sm:py-6 space-y-5 lg:px-5 lg:py-3.5">
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div className="rounded-2xl border border-border bg-slate-50/60 p-4">
                 <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">
                   Valor Fechado
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-primary break-all">
+                <p className="text-xl sm:text-2xl font-bold text-primary break-all lg:text-xl">
                   {formatCurrency(totals.agreed)}
                 </p>
               </div>
@@ -1180,7 +1179,7 @@ export default function EventDetailPage() {
                 <p className="text-xs text-destructive/80 uppercase font-bold tracking-wider mb-1">
                   Despesas
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-destructive break-all">
+                <p className="text-xl sm:text-2xl font-bold text-destructive break-all lg:text-xl">
                   -{formatCurrency(totals.totalExpenses)}
                 </p>
               </div>
@@ -1203,9 +1202,7 @@ export default function EventDetailPage() {
                 {totals.profit >= 0 ? 'Lucro Estimado' : 'Prejuízo Estimado'}
               </p>
               <p
-                className={`text-2xl sm:text-3xl font-bold break-all ${
-                  totals.profit >= 0 ? 'text-success' : 'text-destructive'
-                }`}
+                className={`text-2xl sm:text-3xl font-bold break-all ${ totals.profit >= 0 ? 'text-success' : 'text-destructive' } lg:text-2xl`}
               >
                 {totals.profit >= 0 ? '+' : ''}
                 {formatCurrency(totals.profit)}
@@ -1262,7 +1259,7 @@ export default function EventDetailPage() {
             <Button
               asChild
               variant="outline"
-              className="w-full h-11 rounded-xl font-semibold border-slate-200 text-slate-700 hover:bg-slate-50"
+              className="w-full h-11 rounded-xl font-semibold border-slate-200 text-slate-700 hover:bg-slate-50 lg:h-9"
             >
               <Link href={`/dashboard/finance/new?type=payable&event_id=${eventId}`}>
                 <PlusCircle className="w-4.5 h-4.5 mr-2" />
@@ -1284,7 +1281,7 @@ export default function EventDetailPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Banknote className="w-5 h-5 text-primary" />
+              <Banknote className="w-5 h-5 text-primary lg:w-4 lg:h-4" />
               {editingPayment ? 'Editar Pagamento' : 'Registrar Pagamento'}
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 pt-1">
@@ -1331,7 +1328,7 @@ export default function EventDetailPage() {
                   value={paymentForm.method}
                   onValueChange={(v) => setPaymentForm({ ...paymentForm, method: v })}
                 >
-                  <SelectTrigger className="h-12 rounded-xl">
+                  <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-border text-slate-900">
@@ -1351,7 +1348,7 @@ export default function EventDetailPage() {
                     setPaymentForm({ ...paymentForm, status: v })
                   }
                 >
-                  <SelectTrigger className="h-12 rounded-xl">
+                  <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-border text-slate-900">
@@ -1368,7 +1365,7 @@ export default function EventDetailPage() {
                 <textarea
                   id="pay_notes"
                   rows={3}
-                  className="w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none"
+                  className="w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none lg:text-sm"
                   placeholder="Ex: Sinal de 50%, 2ª parcela, etc."
                   value={paymentForm.notes}
                   onChange={(e) =>
@@ -1400,7 +1397,7 @@ export default function EventDetailPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full sm:w-auto h-11 border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl"
+                className="w-full sm:w-auto h-11 border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl lg:h-9"
                 onClick={() => setPaymentDialogOpen(false)}
                 disabled={paymentLoading}
               >
@@ -1408,7 +1405,7 @@ export default function EventDetailPage() {
               </Button>
               <Button
                 type="submit"
-                className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+                className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 lg:h-10"
                 disabled={paymentLoading}
               >
                 {paymentLoading ? 'Salvando...' : editingPayment ? 'Salvar Alterações' : 'Registrar Pagamento'}
@@ -1429,7 +1426,7 @@ export default function EventDetailPage() {
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <CalendarClock className="w-5 h-5 text-primary" />
+              <CalendarClock className="w-5 h-5 text-primary lg:w-4 lg:h-4" />
               Cronograma de Pagamento
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 pt-1">
@@ -1506,7 +1503,7 @@ export default function EventDetailPage() {
               type="button"
               variant="outline"
               onClick={addDraft}
-              className="w-full h-11 rounded-xl font-semibold border-dashed border-primary/30 text-primary hover:bg-primary/5"
+              className="w-full h-11 rounded-xl font-semibold border-dashed border-primary/30 text-primary hover:bg-primary/5 lg:h-9"
             >
               <PlusCircle className="w-4.5 h-4.5 mr-2" />
               Adicionar Parcela
@@ -1532,7 +1529,7 @@ export default function EventDetailPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full sm:w-auto h-11 border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl"
+              className="w-full sm:w-auto h-11 border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl lg:h-9"
               onClick={() => setScheduleDialogOpen(false)}
               disabled={scheduleSaving}
             >
@@ -1541,7 +1538,7 @@ export default function EventDetailPage() {
             <Button
               type="button"
               onClick={handleScheduleSave}
-              className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl"
+              className="w-full sm:w-auto h-12 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl lg:h-10"
               disabled={scheduleSaving}
             >
               {scheduleSaving ? 'Salvando...' : 'Salvar Cronograma'}

@@ -271,3 +271,15 @@
 @media (prefers-reduced-motion: reduce) {
   .page-enter, .bell-ring, .loading-bar { animation: none; }
 }
+
+/* Telas de evento no desktop: formulário mais compacto (celular não muda). */
+@media (min-width: 1024px) {
+  .ev-compact [data-slot="input"],
+  .ev-compact [data-slot="select-trigger"] {
+    height: 2.5rem;
+    font-size: 0.875rem;
+  }
+  .ev-compact [data-slot="input"]::placeholder { font-size: 0.875rem; }
+  .ev-compact form label { font-size: 13px; margin-bottom: 0.25rem; }
+  .ev-compact textarea { font-size: 0.875rem; }
+}
