@@ -31,6 +31,7 @@ import {
   Calculator,
   UserCog,
   Lock,
+  Smartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -229,6 +230,12 @@ function SidebarContent({
             </div>
           </div>
         )}
+        <Link
+          href="/instalar"
+          className="flex items-center gap-3 rounded-xl px-3 min-h-[44px] text-sm font-medium text-slate-600 hover:bg-primary/5 hover:text-primary"
+        >
+          <Smartphone className="w-5 h-5 shrink-0" /> Instalar app no celular
+        </Link>
         <Button
           variant="outline"
           onClick={() => signOut()}
@@ -318,10 +325,17 @@ function MoreSheet({ open, onOpenChange, newLeads }: { open: boolean; onOpenChan
           })}
         </div>
 
+        <Link
+          href="/instalar"
+          onClick={() => onOpenChange(false)}
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-border py-3.5 text-sm font-semibold text-primary"
+        >
+          <Smartphone className="size-5" /> Instalar app no celular
+        </Link>
         <button
           type="button"
           onClick={() => signOut()}
-          className="mt-6 mb-1 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-50 py-3.5 text-sm font-semibold text-destructive"
+          className="mt-3 mb-1 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-50 py-3.5 text-sm font-semibold text-destructive"
         >
           <LogOut className="size-5" /> Sair da conta
         </button>

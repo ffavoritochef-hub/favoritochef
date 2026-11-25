@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { TeamManager } from '@/components/team/TeamManager';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { NewTenantDialog } from '@/components/master/NewTenantDialog';
+import { authFetch } from '@/lib/api-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,6 +163,15 @@ export default function MasterPage() {
     const { error } = await supabase.from('tenants').update(patch).eq('id', tenant.id);
     setSaving(false);
     if (error) return toast.error(error.message);
+    if (patch.status === 'ativo' && tenant.status !== 'ativo') {
+      // aprovado: dispensa o link de confirmação de e-mail do dono
+      const r = await authFetch('/api/master/tenants/confirm-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: tenant.id }),
+      }).catch(() => null);
+      if (!r?.ok) toast.warning('Aprovado, mas não consegui confirmar o e-mail do dono. Ele pode usar o link enviado por e-mail.');
+    }
     toast.success('Atualizado!');
     setDlg(null);
     load();
