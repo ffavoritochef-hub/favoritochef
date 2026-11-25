@@ -20,6 +20,7 @@ function translateError(msg: string): string {
   if (m.includes('already registered') || m.includes('already been registered')) return 'Este e-mail já está cadastrado. Tente entrar ou use outro e-mail.';
   if (m.includes('password')) return 'A senha deve ter pelo menos 6 caracteres.';
   if (m.includes('rate limit')) return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  if (m.includes('sending') && m.includes('email')) return 'Não foi possível enviar o e-mail de confirmação agora. Aguarde alguns minutos ou peça ao administrador do sistema para criar o acesso.';
   if (m.includes('database error')) return 'Não foi possível concluir o cadastro. Tente novamente em instantes.';
   return msg;
 }

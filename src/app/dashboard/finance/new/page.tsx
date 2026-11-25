@@ -41,7 +41,7 @@ export default function NewTransactionPage() {
     const { data } = await supabase
       .from('events')
       .select('id, name, date')
-      .eq('is_active', true)
+      .not('is_active', 'is', false)
       .order('date', { ascending: false });
     setEvents(data || []);
 

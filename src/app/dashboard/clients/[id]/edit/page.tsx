@@ -132,7 +132,7 @@ export default function EditClientPage() {
             Editar Cliente
           </h1>
           <p className="text-sm sm:text-base text-slate-500">
-            Atualize os dados cadastrais do cliente.
+            Só o nome é obrigatório; o restante pode ficar em branco.
           </p>
         </div>
       </header>
@@ -162,7 +162,7 @@ export default function EditClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="document">CPF ou CNPJ</Label>
+                <Label htmlFor="document">CPF ou CNPJ <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="document"
                   placeholder="000.000.000-00"
@@ -173,7 +173,7 @@ export default function EditClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor="email">E-mail <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="email"
                   type="email"
@@ -185,7 +185,7 @@ export default function EditClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="phone">Telefone Fixo</Label>
+                <Label htmlFor="phone">Telefone Fixo <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="phone"
                   placeholder="(00) 0000-0000"
@@ -196,7 +196,7 @@ export default function EditClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="whatsapp">WhatsApp</Label>
+                <Label htmlFor="whatsapp">WhatsApp <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="whatsapp"
                   placeholder="(00) 90000-0000"
@@ -207,7 +207,7 @@ export default function EditClientPage() {
                 />
               </div>
               <div className="field-group md:col-span-2">
-                <Label htmlFor="address">Endereço</Label>
+                <Label htmlFor="address">Endereço <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="address"
                   placeholder="Rua, Número, Bairro - Cidade"

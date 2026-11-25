@@ -56,7 +56,7 @@ export default function DashboardPage() {
 
         const [evRes, clientsRes, budRes, payRes, empRes, costRes, reimbRes] = await Promise.all([
           supabase.from('events').select('id, name, date, start_time, status, guest_count, agreed_value, client:clients(name)').neq('status', 'Cancelado').gte('date', monthStart).order('date'),
-          supabase.from('clients').select('id', { count: 'exact', head: true }).neq('is_active', false),
+          supabase.from('clients').select('id', { count: 'exact', head: true }).not('is_active', 'is', false),
           supabase.from('budgets').select('id, event_id, total_value, proposal_status, deposit_percent, created_at, events(name, client:clients(name))').in('proposal_status', ['rascunho', 'enviada']).order('created_at', { ascending: false }).limit(5),
           supabase.from('event_payments').select('event_id, amount, status'),
           supabase.from('event_employees').select('event_id'),

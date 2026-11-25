@@ -69,7 +69,7 @@ export default function NewEventPage() {
     const { data } = await supabase
       .from('clients')
       .select('id, name')
-      .eq('is_active', true)
+      .not('is_active', 'is', false)
       .order('name');
     setClients(data || []);
     // ?client_id= (ex.: vindo da conversão de um lead) já deixa o cliente escolhido
@@ -83,7 +83,7 @@ export default function NewEventPage() {
     const { data } = await supabase
       .from('employees')
       .select('id, name, role')
-      .eq('is_active', true)
+      .not('is_active', 'is', false)
       .order('name');
     setEmployees(data || []);
   }

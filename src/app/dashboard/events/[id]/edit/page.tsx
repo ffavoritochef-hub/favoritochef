@@ -80,7 +80,7 @@ export default function EditEventPage() {
     const { data } = await supabase
       .from('employees')
       .select('id, name, role')
-      .eq('is_active', true)
+      .not('is_active', 'is', false)
       .order('name');
     setEmployees(data || []);
   }

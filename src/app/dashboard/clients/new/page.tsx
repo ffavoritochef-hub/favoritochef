@@ -104,7 +104,7 @@ export default function NewClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor="email">E-mail <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="email"
                   type="email"
@@ -114,7 +114,7 @@ export default function NewClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="phone">Telefone Fixo</Label>
+                <Label htmlFor="phone">Telefone Fixo <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="phone"
                   placeholder="(00) 0000-0000"
@@ -123,7 +123,7 @@ export default function NewClientPage() {
                 />
               </div>
               <div className="field-group">
-                <Label htmlFor="whatsapp">WhatsApp</Label>
+                <Label htmlFor="whatsapp">WhatsApp <span className="text-slate-400 font-normal">(opcional)</span></Label>
                 <Input
                   id="whatsapp"
                   placeholder="(00) 90000-0000"

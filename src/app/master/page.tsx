@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { LogOut, Search, ShieldCheck, Check, Ban, X, RefreshCw, CalendarClock, Phone, MapPin, UtensilsCrossed, Users, ChevronRight } from 'lucide-react';
+import { LogOut, Search, ShieldCheck, Check, Ban, X, RefreshCw, CalendarClock, Phone, MapPin, UtensilsCrossed, Users, ChevronRight, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
@@ -15,6 +15,7 @@ import { DURATION_PRESETS, Tenant, addDaysFrom, computeAccess, daysLeft, endOfDa
 import { cn } from '@/lib/utils';
 import { TeamManager } from '@/components/team/TeamManager';
 import { ROLE_LABELS } from '@/lib/permissions';
+import { NewTenantDialog } from '@/components/master/NewTenantDialog';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,7 @@ export default function MasterPage() {
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<MemberLite[]>([]);
   const [teamOf, setTeamOf] = useState<Tenant | null>(null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (authLoading || tenantLoading) return;
@@ -205,9 +207,12 @@ export default function MasterPage() {
           ))}
         </div>
 
-        <div className="relative">
+        <div className="flex gap-2">
+        <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'usuarios' ? 'Buscar usuário por nome, e-mail ou buffet' : 'Buscar por nome, responsável, e-mail ou cidade'} className="pl-10 h-12 rounded-xl bg-white" />
+        </div>
+          <Button onClick={() => setCreating(true)} className="h-12 rounded-xl gap-1.5 shrink-0"><Plus className="w-4 h-4" /><span className="hidden sm:inline">Nova empresa</span><span className="sm:hidden">Nova</span></Button>
         </div>
 
         {loading ? (
@@ -303,6 +308,8 @@ export default function MasterPage() {
           </div>
         )}
       </main>
+
+      <NewTenantDialog open={creating} onOpenChange={setCreating} onCreated={() => { setTab('ativo'); load(); }} />
 
       <Dialog open={!!teamOf} onOpenChange={(o) => { if (!o) { setTeamOf(null); load(); } }}>
         <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
