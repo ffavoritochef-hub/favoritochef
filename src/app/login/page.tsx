@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { UtensilsCrossed, AlertTriangle, Smartphone } from 'lucide-react';
+import { UtensilsCrossed, AlertTriangle, Smartphone, GraduationCap } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,6 +153,10 @@ export default function LoginPage() {
           Tem um buffet e quer usar o sistema?{' '}
           <Link href="/cadastro" className="text-primary font-semibold hover:underline">Cadastrar meu buffet</Link>
         </div>
+
+        <Link href="/como-usar" className="flex items-center justify-center gap-2 text-sm font-semibold text-primary bg-white border border-border rounded-xl p-3.5 hover:bg-primary/5 min-h-[48px]">
+          <GraduationCap className="w-4 h-4" /> Como usar o sistema (vídeos)
+        </Link>
 
         <Link href="/instalar" className="flex items-center justify-center gap-2 text-sm font-semibold text-primary bg-white border border-border rounded-xl p-3.5 hover:bg-primary/5 min-h-[48px]">
           <Smartphone className="w-4 h-4" /> Como instalar o app no celular

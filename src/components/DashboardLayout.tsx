@@ -32,6 +32,7 @@ import {
   UserCog,
   Lock,
   Smartphone,
+  GraduationCap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -231,6 +232,12 @@ function SidebarContent({
           </div>
         )}
         <Link
+          href="/como-usar"
+          className="flex items-center gap-3 rounded-xl px-3 min-h-[44px] text-sm font-medium text-slate-600 hover:bg-primary/5 hover:text-primary"
+        >
+          <GraduationCap className="w-5 h-5 shrink-0" /> Como usar (vídeos)
+        </Link>
+        <Link
           href="/instalar"
           className="flex items-center gap-3 rounded-xl px-3 min-h-[44px] text-sm font-medium text-slate-600 hover:bg-primary/5 hover:text-primary"
         >
@@ -326,9 +333,16 @@ function MoreSheet({ open, onOpenChange, newLeads }: { open: boolean; onOpenChan
         </div>
 
         <Link
-          href="/instalar"
+          href="/como-usar"
           onClick={() => onOpenChange(false)}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-border py-3.5 text-sm font-semibold text-primary"
+        >
+          <GraduationCap className="size-5" /> Como usar (vídeos)
+        </Link>
+        <Link
+          href="/instalar"
+          onClick={() => onOpenChange(false)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border py-3.5 text-sm font-semibold text-primary"
         >
           <Smartphone className="size-5" /> Instalar app no celular
         </Link>
