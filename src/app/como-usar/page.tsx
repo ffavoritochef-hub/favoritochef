@@ -22,7 +22,18 @@ function Player({ t }: { t: Tutorial }) {
     );
   }
   if (src.kind === 'file') {
-    return <video src={src.src} controls autoPlay playsInline className="aspect-video w-full bg-black" />;
+    // gravações de tela do celular (em pé): limita a altura para caber na tela
+    return (
+      <video
+        src={src.src}
+        poster={t.capa}
+        controls
+        autoPlay
+        playsInline
+        preload="metadata"
+        className="mx-auto block max-h-[78dvh] w-full bg-black object-contain"
+      />
+    );
   }
   return (
     <iframe
@@ -37,7 +48,7 @@ function Player({ t }: { t: Tutorial }) {
 
 function Card({ t, onOpen }: { t: Tutorial; onOpen: () => void }) {
   const src = videoSource(t.video);
-  const thumb = src.kind === 'embed' ? src.thumb : undefined;
+  const thumb = t.capa ?? (src.kind === 'embed' ? src.thumb : undefined);
   const soon = src.kind === 'none';
   return (
     <button
@@ -48,7 +59,7 @@ function Card({ t, onOpen }: { t: Tutorial; onOpen: () => void }) {
       <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-primary/15 to-primary/5">
         {thumb && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumb} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
+          <img src={thumb} alt="" loading="lazy" className="absolute inset-0 size-full object-cover object-top" />
         )}
         <div className="absolute inset-0 flex items-center justify-center">
           <PlayCircle
@@ -223,7 +234,10 @@ export default function ComoUsarPage() {
           aria-label={aberto.titulo}
         >
           <div
-            className="w-full max-w-4xl overflow-hidden bg-white sm:rounded-2xl"
+            className={cn(
+              'w-full overflow-hidden bg-white sm:rounded-2xl',
+              videoSource(aberto.video).kind === 'file' ? 'max-w-md' : 'max-w-4xl',
+            )}
             onClick={(e) => e.stopPropagation()}
           >
             <Player t={aberto} />
