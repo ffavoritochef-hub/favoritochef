@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { MENU_LIBRARY, SECTION_ORDER } from '@/lib/menu-library';
 import { getMenu, removeMenuPhoto, saveMenu, uploadMenuPhoto, type MenuData, type MenuItemRow } from '@/lib/menus';
+import { parseDecimal } from '@/lib/utils';
 
 const textareaCls =
   'w-full rounded-xl border border-border bg-white px-4 py-3 text-[16px] leading-relaxed text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:outline-none';
@@ -92,7 +93,7 @@ export function MenuForm({ menuId }: { menuId?: string }) {
     if (!name) return toast.error('Dê um nome ao cardápio.');
     const filled = items.filter((i) => i.name.trim());
     if (!filled.length) return toast.error('Adicione pelo menos um item ao cardápio.');
-    const p = price.trim() ? Number(price.replace(/\./g, '').replace(',', '.')) : null;
+    const p = price.trim() ? parseDecimal(price) : null;
     if (p != null && (!Number.isFinite(p) || p < 0)) return toast.error('Preço por pessoa inválido.');
 
     setSaving(true);

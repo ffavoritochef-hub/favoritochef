@@ -30,6 +30,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatBRL } from '@/lib/buffet-rules';
 import { MENU_LIBRARY, groupBySection, type LibraryMenu } from '@/lib/menu-library';
+import { parseDecimal } from '@/lib/utils';
 import {
   deleteMenu,
   duplicateMenu,
@@ -683,7 +684,7 @@ function BaseItemDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) return toast.error('Informe o nome do item.');
-    const cost = form.cost_price.trim() ? Number(form.cost_price.replace(/\./g, '').replace(',', '.')) : 0;
+    const cost = form.cost_price.trim() ? parseDecimal(form.cost_price) : 0;
     if (!Number.isFinite(cost) || cost < 0) return toast.error('Custo inválido.');
     const row = {
       name: form.name.trim(),

@@ -62,18 +62,7 @@ export function normalizeTime(v: string | null | undefined): string {
 export const formatDecimalInput = (n: number) =>
   Number.isFinite(n) && n > 0 ? n.toFixed(2).replace('.', ',') : '';
 
-/**
- * Número digitado (aceita "1.234,56", "1500,50", "1234.56" e "1.500" = mil e quinhentos);
- * vazio/inválido vira NaN.
- */
-export function parseDecimal(v: unknown): number {
-  if (typeof v === 'number') return v;
-  let s = String(v ?? '').trim().replace(/\s|R\$/g, '');
-  if (!s) return NaN;
-  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
-  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
-  return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : NaN;
-}
+export { parseDecimal } from './utils';
 
 export interface EventValidation {
   errors: EventFormErrors;

@@ -22,6 +22,17 @@ const num = (v: string) => {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 
+function CardTitleIcon({ icon: Icon, children }: { icon: React.ElementType; children: React.ReactNode }) {
+  return (
+    <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
+      <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="size-5" />
+      </span>
+      {children}
+    </CardTitle>
+  );
+}
+
 export function BudgetForm({ budgetId }: { budgetId?: string }) {
   const [loading, setLoading] = useState(false);
   const [loadingBudget, setLoadingBudget] = useState(!!budgetId);
@@ -247,14 +258,6 @@ export function BudgetForm({ budgetId }: { budgetId?: string }) {
     }
   };
 
-  const CardTitleIcon = ({ icon: Icon, children }: { icon: any; children: React.ReactNode }) => (
-    <CardTitle className="flex items-center gap-2.5 text-lg sm:text-xl text-slate-900">
-      <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <Icon className="size-5" />
-      </span>
-      {children}
-    </CardTitle>
-  );
   const headCls = 'bg-slate-50/60 border-b border-border px-5 sm:px-8 py-5 sm:py-6';
   const bodyCls = 'px-5 sm:px-8 py-6 sm:py-8 space-y-6';
   const money = (label: string, key: keyof typeof form, hint?: string) => (

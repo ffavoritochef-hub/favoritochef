@@ -151,6 +151,8 @@ export function findScheduleConflicts(
     if (ev.id && ev.id === candidate.id) continue;
     if (ev.status && INACTIVE_STATUSES.has(ev.status)) continue;
     if (String(ev.date).slice(0, 10) !== String(candidate.date).slice(0, 10)) continue;
+    // evento antigo sem horário não tem como conflitar (e não pode quebrar a checagem)
+    if (!ev.start_time || !ev.end_time) continue;
 
     const es = toMinutes(ev.start_time);
     let ee = toMinutes(ev.end_time);

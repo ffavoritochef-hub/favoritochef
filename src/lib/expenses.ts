@@ -28,11 +28,13 @@ export type Expense = {
 export const isPending = (status: string | null | undefined) =>
   status === 'pendente' || status === 'atrasado';
 
-/** Aceita "1.234,56", "1234,56", "1234.56" e "150". */
+/** Aceita "1.234,56", "1234,56", "1234.56", "1.500" (mil e quinhentos) e "150". */
 export function parseMoney(input: string): number {
   const s = input.trim().replace(/[R$\s]/g, '');
   if (!s) return 0;
-  const normalized = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  // "1.500" (só pontos de milhar) é mil e quinhentos, não 1,5
+  const thousandsOnly = /^\d{1,3}(\.\d{3})+$/.test(s);
+  const normalized = s.includes(',') || thousandsOnly ? s.replace(/\./g, '').replace(',', '.') : s;
   const n = Number(normalized);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }

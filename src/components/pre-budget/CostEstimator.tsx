@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatBRL } from '@/lib/buffet-rules';
 import { calcCostPrice, ingredientKey, type CostIngredient } from '@/lib/pre-budget';
+import { parseDecimal } from '@/lib/utils';
 
 interface Row extends CostIngredient {
   /** preço veio dos itens base do buffet (não da IA) */
@@ -25,7 +26,7 @@ interface BaseItem {
 }
 
 const toNum = (v: string) => {
-  const n = Number(v.replace(/\./g, '').replace(',', '.'));
+  const n = parseDecimal(v);
   return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 const fmt = (n: number) => (n ? String(n).replace('.', ',') : '');
