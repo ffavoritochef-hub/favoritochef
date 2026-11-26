@@ -18,8 +18,9 @@ import { ChevronLeft, Save, Calendar, MapPin, Users, Clock, DollarSign, Sparkles
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
-import { useScheduleConflicts, ScheduleConflictAlert, StaffSuggestionBox } from '@/components/EventRulesAlerts';
+import { useScheduleConflicts, checkScheduleConflicts, ScheduleConflictAlert, StaffSuggestionBox } from '@/components/EventRulesAlerts';
 import { validateStatusTransition } from '@/lib/buffet-rules';
+import { buildEventPayload, errorMessage, validateEventForm } from '@/lib/event-form';
 
 const eventTypes = [
   'Casamento',
@@ -109,16 +110,14 @@ export default function NewEventPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.client_id) {
-      toast.error('Selecione o cliente do evento. Se ele ainda não existe, cadastre em Clientes > Novo Cliente.');
-      return;
-    }
-    if (!formData.name.trim()) {
-      toast.error('Informe o nome do evento.');
-      return;
-    }
-    if (!formData.date || !formData.start_time || !formData.end_time) {
-      toast.error('Informe a data e os horários de início e término.');
+    if (loading) return;
+    const v = validateEventForm(formData);
+    if (!v.ok) {
+      toast.error(
+        v.firstField === 'client_id'
+          ? 'Selecione o cliente do evento. Se ele ainda não existe, cadastre em Clientes > Novo Cliente.'
+          : v.firstMessage
+      );
       return;
     }
     const tr = validateStatusTransition('Orçamento enviado', formData.status, {
@@ -133,44 +132,43 @@ export default function NewEventPage() {
     setLoading(true);
 
     try {
-      if (conflicts.some((c) => c.kind === 'sobreposicao')) {
-        throw new Error('Há conflito de horário com outro evento nesta data.');
-      }
-      if (conflicts.length > 0) toast.warning('Atenção: intervalo curto entre eventos no mesmo dia.');
+      // confere a agenda no banco agora (o aviso da tela pode estar desatualizado)
+      const fresh = await checkScheduleConflicts(formData.date, formData.start_time, formData.end_time);
+      const hard = fresh.find((c) => c.kind === 'sobreposicao');
+      if (hard) throw new Error('Há conflito de horário com outro evento nesta data. ' + hard.message);
+      if (fresh.length > 0) toast.warning('Atenção: intervalo curto entre eventos no mesmo dia.');
 
       const { data, error } = await supabase
         .from('events')
-        .insert([{
-          ...formData,
-          name: formData.name.trim(),
-          type: formData.type || null,
-          address: formData.address.trim() || null,
-          observations: formData.observations.trim() || null,
-          guest_count: Math.max(0, Math.floor(Number(formData.guest_count) || 0)),
-          agreed_value: Math.max(0, Number(formData.agreed_value) || 0),
-        }])
+        .insert([buildEventPayload(formData)])
         .select('id');
 
       if (error) throw error;
+      const eventId = data?.[0]?.id;
+      if (!eventId) throw new Error('O evento não foi salvo. Verifique se o acesso do buffet está ativo e tente de novo.');
 
-      if (selectedEmployees.length > 0 && data && data[0]?.id) {
-        const eventId = data[0].id;
+      if (selectedEmployees.length > 0) {
         const links = selectedEmployees.map((se) => ({
           event_id: eventId,
           employee_id: se.employee_id,
-          specific_role: se.specific_role || null,
+          specific_role: se.specific_role.trim() || null,
         }));
         const { error: linkErr } = await supabase
           .from('event_employees')
           .insert(links);
-        if (linkErr) throw linkErr;
+        if (linkErr) {
+          // o evento já existe: leva para ele em vez de deixar o usuário cadastrar de novo (duplicado)
+          toast.error('Evento criado, mas a equipe não foi salva: ' + errorMessage(linkErr) + ' Escale a equipe em "Editar".');
+          router.push(`/dashboard/events/${eventId}`);
+          return;
+        }
       }
 
+      for (const w of v.warnings) toast.warning(w);
       toast.success('Evento agendado! Defina agora o cronograma de pagamento.');
-      router.push(data?.[0]?.id ? `/dashboard/events/${data[0].id}` : '/dashboard/events');
-    } catch (error: any) {
-      toast.error('Erro ao agendar evento: ' + error.message);
-    } finally {
+      router.push(`/dashboard/events/${eventId}`);
+    } catch (error) {
+      toast.error('Erro ao agendar evento: ' + errorMessage(error));
       setLoading(false);
     }
   };
@@ -222,7 +220,7 @@ export default function NewEventPage() {
                 <Label>Cliente</Label>
                 <Select
                   value={formData.client_id}
-                  onValueChange={(val) => setFormData({ ...formData, client_id: val })}
+                  onValueChange={(val) => val && setFormData((prev) => ({ ...prev, client_id: val }))}
                 >
                   <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue placeholder="Selecione o cliente" />
@@ -255,7 +253,7 @@ export default function NewEventPage() {
                 <Label>Tipo de Evento</Label>
                 <Select
                   value={formData.type}
-                  onValueChange={(val) => setFormData({ ...formData, type: val })}
+                  onValueChange={(val) => val && setFormData((prev) => ({ ...prev, type: val }))}
                 >
                   <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue placeholder="Selecione o tipo" />
@@ -272,7 +270,7 @@ export default function NewEventPage() {
                 <Label>Status do Evento</Label>
                 <Select
                   value={formData.status}
-                  onValueChange={(val) => setFormData({ ...formData, status: val })}
+                  onValueChange={(val) => val && setFormData((prev) => ({ ...prev, status: val }))}
                 >
                   <SelectTrigger className="h-12 rounded-xl lg:h-10">
                     <SelectValue placeholder="Selecione o status" />

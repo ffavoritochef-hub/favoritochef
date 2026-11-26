@@ -186,6 +186,16 @@ const TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   Cancelado: ['Orçamento enviado'],
 };
 
+/**
+ * Status que podem ser escolhidos a partir do atual (o próprio atual incluso).
+ * Status fora do fluxo (legado) liberam a lista inteira para corrigir o cadastro.
+ */
+export function allowedStatusOptions(from: string): string[] {
+  if (!EVENT_STATUSES.includes(from as EventStatus)) return [from, ...EVENT_STATUSES].filter(Boolean);
+  const next = new Set<string>([from, ...TRANSITIONS[from as EventStatus]]);
+  return EVENT_STATUSES.filter((s) => next.has(s));
+}
+
 export interface TransitionContext {
   agreedValue: number;
   receivedTotal: number; // soma de pagamentos com status Recebido

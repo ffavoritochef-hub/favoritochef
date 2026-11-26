@@ -10,6 +10,24 @@ import {
 } from '@/lib/buffet-rules';
 import { AlertTriangle, CheckCircle2, HardHat } from 'lucide-react';
 
+/**
+ * Consulta o banco na hora (usado ao salvar, para não depender do aviso
+ * da tela, que pode ainda estar carregando). Lança erro se a consulta falhar.
+ */
+export async function checkScheduleConflicts(
+  date: string,
+  start: string,
+  end: string,
+  excludeId?: string
+): Promise<ConflictResult[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select('id, name, date, start_time, end_time, status')
+    .eq('date', date);
+  if (error) throw error;
+  return findScheduleConflicts({ id: excludeId, date, start_time: start, end_time: end }, (data as any[]) || []);
+}
+
 /** Busca eventos do mesmo dia e calcula conflitos de horário/montagem. */
 export function useScheduleConflicts(
   date: string,
